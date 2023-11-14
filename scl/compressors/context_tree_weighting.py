@@ -2,6 +2,7 @@ from __future__ import annotations
 from scl.utils.tree_utils import BinaryNode
 from typing import Literal
 import copy
+import numpy as np
 
 def is_valid_binary_string(binary_string: str) -> bool:
     for char in binary_string:
@@ -83,7 +84,7 @@ class CTWTree():
 
     def gen_tree(self, depth: int, current_context: str) -> CTWNode:
         if depth == 0:
-            return CTWNode(id=current_context)
+            return CTWNode(id=current_context, left_child=None, right_child=None)
         left_child = self.gen_tree(depth-1, current_context + "0")
         right_child = self.gen_tree(depth-1, current_context + "1")
         return CTWNode(id=current_context, left_child=left_child, right_child=right_child)
@@ -128,17 +129,42 @@ class CTWTree():
         if self.get_snapshot:
             self.snapshot.append((node, copy.deepcopy(node)))
         node.kt_update(symbol, self.alpha)
-    
-test = CTWTree(tree_height=3, past_context="110")
-test.print_tree()
 
-test.update_tree("0100110")
-print("After adding 0100110")
-test.print_tree()
+def test_ctw_node():
+    # TODO: Add logic to test the behavior of CTWNode
+    pass
 
-print(test.get_symbol_prob("0"))
+def test_ctw_tree_generation():
+    test = CTWTree(tree_height=3, past_context="110")
+    np.testing.assert_almost_equal(
+        test.root.node_prob,
+        1,
+    )
 
-test.update_tree("0")
-print("After adding 0")
-test.print_tree()
+    test.update_tree("0100110")
+    np.testing.assert_almost_equal(
+        test.root.node_prob,
+        7/2048,
+    )
 
+    test.update_tree("0")
+    np.testing.assert_almost_equal(
+        test.root.node_prob,
+        153/65536,
+    )
+
+def test_ctw_tree_probability():
+    test = CTWTree(tree_height=3, past_context="110")
+    test.update_tree("0100110")
+    np.testing.assert_almost_equal(
+        test.get_symbol_prob("0"),
+        (153/65536)/(7/2048)
+    )
+    np.testing.assert_almost_equal(
+        test.root.node_prob,
+        7/2048,
+    )
+    np.testing.assert_almost_equal(
+        test.get_symbol_prob("1"),
+        (71/65536)/(7/2048)
+    )
