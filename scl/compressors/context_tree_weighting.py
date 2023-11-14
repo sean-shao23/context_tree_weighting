@@ -1,9 +1,22 @@
 from __future__ import annotations
+from scl.compressors.arithmetic_coding import AECParams, ArithmeticDecoder, ArithmeticEncoder
+from scl.core.data_block import DataBlock
+from scl.core.prob_dist import Frequencies
 from scl.utils.bitarray_utils import BitArray, uint_to_bitarray
+from scl.utils.test_utils import try_lossless_compression
 from scl.utils.tree_utils import BinaryNode
-from typing import Literal
 import copy
 import numpy as np
+
+def convert_float_prob_to_int(p, M=1000):
+    """
+    Convert a float probability to an integer probability
+    :param p: float probability
+    :param M: multiplier
+    :return: integer probability
+    """
+    assert 0 <= p <= 1, "p must be between 0 and 1"
+    return max(1, int(p * M))
 
 class CTWNode(BinaryNode):
     """represents a node of the CTW tree
@@ -53,7 +66,7 @@ class CTWNode(BinaryNode):
         original_id = self.id
         if not self.id:
             self.id = "ROOT"
-        self.id += ", a=" + str(self.a) + ", b=" + str(self.b) + ", node_prob=" + str(self.node_prob)
+        self.id = str(self.id) + ", a=" + str(self.a) + ", b=" + str(self.b) + ", node_prob=" + str(self.node_prob)
         lines, root_node = super()._get_lines()
         self.id = original_id
         return lines, root_node
@@ -64,14 +77,15 @@ class CTWTree():
     current_context: BitArray = None
     snapshot: list = None
     get_snapshot: bool = None
-    alpha: float = 0.5
+    alpha: float = None
 
-    def __init__(self, tree_height: int, past_context: BitArray):
+    def __init__(self, tree_height: int, past_context: BitArray, alpha: float = 0.5):
         assert len(past_context) == tree_height
 
+        self.alpha = alpha
+        self.current_context = past_context
         self.root = self.gen_tree(depth=tree_height, node_context=BitArray())
 
-        self.current_context = past_context
 
     def print_tree(self):
         self.root.print_node()
@@ -85,7 +99,7 @@ class CTWTree():
     
     def update_tree(self, sequence: BitArray):
         for symbol in sequence:
-            self._update_tree_symbol(symbol)
+            self.update_tree_symbol(symbol)
 
     def revert_tree(self):
         for node, prev_state in self.snapshot:
@@ -108,7 +122,7 @@ class CTWTree():
         self.get_snapshot = False
         return symbol_prob
 
-    def _update_tree_symbol(self, next_symbol: bool):
+    def update_tree_symbol(self, next_symbol: bool):
         self._update_node(node=self.root, context=self.current_context, symbol=next_symbol)
         self.current_context = self.current_context[1:] + uint_to_bitarray(next_symbol)
 
@@ -123,41 +137,108 @@ class CTWTree():
             self.snapshot.append((node, copy.deepcopy(node)))
         node.kt_update(symbol, self.alpha)
 
+class CTWModel:
+    
+    freqs_current: float = None
+    ctw_tree: CTWTree = None
+
+    def __init__(self, tree_height: int, context: BitArray, alpha: float = 0.5):
+        self.freqs_current = Frequencies({0: 1, 1: 1})
+        self.ctw_tree = CTWTree(tree_height=tree_height, past_context=context, alpha=alpha)
+
+    def update_model(self, symbol: bool):
+        self.ctw_tree.update_tree_symbol(symbol)
+        new_dist = {0: convert_float_prob_to_int(self.ctw_tree.get_symbol_prob(0)),
+                    1: convert_float_prob_to_int(self.ctw_tree.get_symbol_prob(1))}
+        self.freqs_current = Frequencies(new_dist)
+
+        aec_params = AECParams() # params used for arithmetic coding in SCL
+        assert self.freqs_current.total_freq <= aec_params.MAX_ALLOWED_TOTAL_FREQ, (
+            f"Total freq {self.freqs_current.total_freq} is greater than "
+            f"max allowed total freq {aec_params.MAX_ALLOWED_TOTAL_FREQ} for arithmetic coding in SCL. This leads to"
+            f"precision and speed issues. Try reducing the total freq by a factor of 2 or more."
+        )
+        self.freqs_current._validate_freq_dist(self.freqs_current.freq_dict) # check if freqs are valid datatype
+
+
 def test_ctw_node():
     # TODO: Add logic to test the behavior of CTWNode
-    pass
+    test_node = CTWNode()
 
+# TODO: Add tests with different alpha values
 def test_ctw_tree_generation():
-    test = CTWTree(tree_height=3, past_context=BitArray("110"))
+    test_tree = CTWTree(tree_height=3, past_context=BitArray("110"))
     np.testing.assert_almost_equal(
-        test.root.node_prob,
+        test_tree.root.node_prob,
         1,
     )
 
-    test.update_tree(BitArray("0100110"))
+    test_tree.update_tree(BitArray("0100110"))
     np.testing.assert_almost_equal(
-        test.root.node_prob,
+        test_tree.root.node_prob,
         7/2048,
     )
 
-    test.update_tree(BitArray("0"))
+    test_tree.update_tree_symbol(0)
     np.testing.assert_almost_equal(
-        test.root.node_prob,
+        test_tree.root.node_prob,
         153/65536,
     )
 
 def test_ctw_tree_probability():
-    test = CTWTree(tree_height=3, past_context=BitArray("110"))
-    test.update_tree(BitArray("0100110"))
+    test_tree = CTWTree(tree_height=3, past_context=BitArray("110"))
+    test_tree.update_tree(BitArray("0100110"))
     np.testing.assert_almost_equal(
-        test.get_symbol_prob(0),
+        test_tree.get_symbol_prob(0),
         (153/65536)/(7/2048)
     )
     np.testing.assert_almost_equal(
-        test.root.node_prob,
+        test_tree.root.node_prob,
         7/2048,
     )
     np.testing.assert_almost_equal(
-        test.get_symbol_prob(1),
+        test_tree.get_symbol_prob(1),
         (71/65536)/(7/2048)
     )
+
+def test_ctw_model():
+    def compress_sequence(sequence: list):
+        data_block = DataBlock(sequence)
+        # define AEC params
+        aec_params = AECParams()
+        # define encoder/decoder models
+        # NOTE: important to make a copy, as the encoder updates the model, and we don't want to pass
+        # the update model around
+        freq_model_enc = CTWModel(3, BitArray("110"))
+        freq_model_dec = copy.deepcopy(freq_model_enc)
+
+        # create encoder/decoder
+        encoder = ArithmeticEncoder(aec_params, freq_model_enc)
+        decoder = ArithmeticDecoder(aec_params, freq_model_dec)
+
+        # check if encoding/decoding is lossless
+        is_lossless, encode_len, _ = try_lossless_compression(
+            data_block, encoder, decoder, add_extra_bits_to_encoder_output=True
+        )
+
+        assert is_lossless
+
+        return encode_len / data_block.size
+
+    DATA_SIZE = 1000
+
+    np.random.seed(0)
+    input_seq = []
+    for _ in range(DATA_SIZE):
+        input_seq.append(np.random.binomial(1, 0.5))
+    avg_codelen = compress_sequence(input_seq)
+    np.testing.assert_almost_equal(avg_codelen, 1, decimal=1)
+
+    np.random.seed(0)
+    input_seq = [np.random.binomial(1, 0.5)]
+    for _ in range(DATA_SIZE):
+        input_seq.append(input_seq[-1] ^ 0)
+    avg_codelen = compress_sequence(input_seq)
+    np.testing.assert_almost_equal(avg_codelen, 1, decimal=1)
+
+    
