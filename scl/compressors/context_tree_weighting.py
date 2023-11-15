@@ -48,13 +48,13 @@ class CTWNode(BinaryNode):
         else:
             self.b += 1
 
-    def pr_prob(self, nx: int, n: int, alpha: float) -> float:
-        return (nx + alpha) / (n + 1)
+    def pr_prob(self, nx: int, n: int) -> float:
+        return (nx + 0.5) / (n + 1)
 
-    def kt_update(self, next_symbol: bool, alpha: float):
+    def kt_update(self, next_symbol: bool):
         nx = self.get_count(next_symbol)
         n = self.a + self.b
-        self.kt_prob = self.kt_prob * self.pr_prob(nx=nx, n=n, alpha=alpha)
+        self.kt_prob = self.kt_prob * self.pr_prob(nx=nx, n=n)
         if self.left_child == None and self.right_child == None:
             self.node_prob = self.kt_prob
         else:
@@ -77,12 +77,10 @@ class CTWTree():
     current_context: BitArray = None
     snapshot: list = None
     get_snapshot: bool = None
-    alpha: float = None
 
-    def __init__(self, tree_height: int, past_context: BitArray, alpha: float = 0.5):
+    def __init__(self, tree_height: int, past_context: BitArray):
         assert len(past_context) == tree_height
 
-        self.alpha = alpha
         self.current_context = past_context
         self.root = self.gen_tree(depth=tree_height, node_context=BitArray())
 
@@ -93,8 +91,8 @@ class CTWTree():
     def gen_tree(self, depth: int, node_context: BitArray) -> CTWNode:
         if depth == 0:
             return CTWNode(id=node_context, left_child=None, right_child=None)
-        left_child = self.gen_tree(depth=depth-1, node_context=node_context + BitArray(0))
-        right_child = self.gen_tree(depth=depth-1, node_context=node_context + BitArray(1))
+        left_child = self.gen_tree(depth=depth-1, node_context=node_context + BitArray("0"))
+        right_child = self.gen_tree(depth=depth-1, node_context=node_context + BitArray("1"))
         return CTWNode(id=node_context, left_child=left_child, right_child=right_child)
     
     def update_tree(self, sequence: BitArray):
@@ -131,21 +129,21 @@ class CTWTree():
         if len(context) == 0:
             if self.get_snapshot:
                 self.snapshot.append((node, copy.deepcopy(node)))
-            node.kt_update(symbol, self.alpha)
+            node.kt_update(symbol)
             return
         self._update_node(node=node.get_child(context[-1]), context=context[:-1], symbol=symbol)
         if self.get_snapshot:
             self.snapshot.append((node, copy.deepcopy(node)))
-        node.kt_update(symbol, self.alpha)
+        node.kt_update(symbol)
 
 class CTWModel:
     
     freqs_current: float = None
     ctw_tree: CTWTree = None
 
-    def __init__(self, tree_height: int, context: BitArray, alpha: float = 0.5):
+    def __init__(self, tree_height: int, context: BitArray):
         self.freqs_current = Frequencies({0: 1, 1: 1})
-        self.ctw_tree = CTWTree(tree_height=tree_height, past_context=context, alpha=alpha)
+        self.ctw_tree = CTWTree(tree_height=tree_height, past_context=context)
 
     def update_model(self, symbol: bool):
         self.ctw_tree.update_tree_symbol(symbol)
@@ -166,7 +164,6 @@ def test_ctw_node():
     # TODO: Add logic to test the behavior of CTWNode
     test_node = CTWNode()
 
-# TODO: Add tests with different alpha values
 def test_ctw_tree_generation():
     test_tree = CTWTree(tree_height=3, past_context=BitArray("110"))
     np.testing.assert_almost_equal(
