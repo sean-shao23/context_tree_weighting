@@ -8,27 +8,17 @@ from scl.utils.tree_utils import BinaryNode
 import copy
 import numpy as np
 
-def convert_float_prob_to_int(p, M=1000):
-    """
-    Convert a float probability to an integer probability
-    :param p: float probability
-    :param M: multiplier
-    :return: integer probability
-    """
-    assert 0 <= p <= 1, "p must be between 0 and 1"
-    return max(1, int(p * M))
-
 class CTWNode(BinaryNode):
     """represents a node of the CTW tree
 
     NOTE: BinaryNode class already has left_child, right_child, id fields
-    here by subclassing we add the fields: a, b, node_prob
+    here by subclassing we add the fields: a, b, kt_prob_log2, node_prob_log2
     """
 
-    a: int = 0              # represents number of 0's
-    b: int = 0              # represents number of 1's
-    kt_prob: float = 1      # represents kt probability for current a, b
-    node_prob: float = 1    # probability of node
+    a: int = 0                  # represents number of 0's
+    b: int = 0                  # represents number of 1's
+    kt_prob_log2: float = 0     # represents log2 of kt probability for current a, b
+    node_prob_log2: float = 0   # represents log2 of probability of node
 
     def get_child(self, symbol: bool) -> CTWNode:
         if not symbol:
@@ -48,25 +38,32 @@ class CTWNode(BinaryNode):
         else:
             self.b += 1
 
-    def pr_prob(self, nx: int, n: int, alpha: float) -> float:
-        return (nx + alpha) / (n + 1)
+    def average_log2(self, a: float, b: float) -> float:
+        # return np.log2(0.5 * (2**a + 2**b)) using some funky math
+        return a-1 + np.log2(2**(b-a) + 1)
 
-    def kt_update(self, next_symbol: bool, alpha: float):
+    def pr_prob_log2(self, nx: int, n: int) -> float:
+        return np.log2(nx + 0.5) - np.log2(n + 1)
+
+    def kt_update_log2(self, next_symbol: bool):
         nx = self.get_count(next_symbol)
         n = self.a + self.b
-        self.kt_prob = self.kt_prob * self.pr_prob(nx=nx, n=n, alpha=alpha)
+
+        self.kt_prob_log2 = self.kt_prob_log2 + self.pr_prob_log2(nx=nx, n=n)
+
         if self.left_child == None and self.right_child == None:
-            self.node_prob = self.kt_prob
+            # Node is a leaf:
+            self.node_prob_log2 = self.kt_prob_log2
         else:
-            self.node_prob = 0.5 * (self.kt_prob
-                                    + self.left_child.node_prob * self.right_child.node_prob)
+            # Node is not a leaf:
+            self.node_prob_log2 = self.average_log2(self.kt_prob_log2, self.left_child.node_prob_log2 + self.right_child.node_prob_log2)
         self.increment_count(next_symbol)
 
     def _get_lines(self):
         original_id = self.id
         if not self.id:
             self.id = "ROOT"
-        self.id = str(self.id) + ", a=" + str(self.a) + ", b=" + str(self.b) + ", node_prob=" + str(self.node_prob)
+        self.id = str(self.id) + ", a=" + str(self.a) + ", b=" + str(self.b) + ", node_prob=" + str(2**self.node_prob_log2)
         lines, root_node = super()._get_lines()
         self.id = original_id
         return lines, root_node
@@ -77,15 +74,12 @@ class CTWTree():
     current_context: BitArray = None
     snapshot: list = None
     get_snapshot: bool = None
-    alpha: float = None
 
-    def __init__(self, tree_height: int, past_context: BitArray, alpha: float = 0.5):
+    def __init__(self, tree_height: int, past_context: BitArray):
         assert len(past_context) == tree_height
 
-        self.alpha = alpha
         self.current_context = past_context
         self.root = self.gen_tree(depth=tree_height, node_context=BitArray())
-
 
     def print_tree(self):
         self.root.print_node()
@@ -93,8 +87,8 @@ class CTWTree():
     def gen_tree(self, depth: int, node_context: BitArray) -> CTWNode:
         if depth == 0:
             return CTWNode(id=node_context, left_child=None, right_child=None)
-        left_child = self.gen_tree(depth=depth-1, node_context=node_context + BitArray(0))
-        right_child = self.gen_tree(depth=depth-1, node_context=node_context + BitArray(1))
+        left_child = self.gen_tree(depth=depth-1, node_context=node_context + BitArray("0"))
+        right_child = self.gen_tree(depth=depth-1, node_context=node_context + BitArray("1"))
         return CTWNode(id=node_context, left_child=left_child, right_child=right_child)
     
     def update_tree(self, sequence: BitArray):
@@ -107,21 +101,22 @@ class CTWTree():
             assert type(prev_state) == CTWNode
             node.a = prev_state.a
             node.b = prev_state.b
-            node.kt_prob = prev_state.kt_prob
-            node.node_prob = prev_state.node_prob
+            node.kt_prob_log2 = prev_state.kt_prob_log2
+            node.node_prob_log2 = prev_state.node_prob_log2
         self.snapshot = []
 
-    # TODO: This will return 0 probability...that seems bad/wrong?
-    def get_symbol_prob(self, symbol: bool):
+    # TODO: This sometimes returns probability 0
+    # Or infinite probability
+    def get_symbol_prob_log2(self, symbol: bool) -> float:
         self.snapshot = []
         self.get_snapshot = True
-        context_prob = self.root.node_prob
+        context_prob_log2 = self.root.node_prob_log2
         self._update_node(node=self.root, context=self.current_context, symbol=symbol)
-        symbol_context_prob = self.root.node_prob
-        symbol_prob = symbol_context_prob/context_prob
+        symbol_context_prob_log2 = self.root.node_prob_log2
+        symbol_prob_log2 = symbol_context_prob_log2 - context_prob_log2
         self.revert_tree()
         self.get_snapshot = False
-        return symbol_prob
+        return symbol_prob_log2
 
     def update_tree_symbol(self, next_symbol: bool):
         self._update_node(node=self.root, context=self.current_context, symbol=next_symbol)
@@ -131,26 +126,39 @@ class CTWTree():
         if len(context) == 0:
             if self.get_snapshot:
                 self.snapshot.append((node, copy.deepcopy(node)))
-            node.kt_update(symbol, self.alpha)
+            node.kt_update_log2(symbol)
             return
         self._update_node(node=node.get_child(context[-1]), context=context[:-1], symbol=symbol)
         if self.get_snapshot:
             self.snapshot.append((node, copy.deepcopy(node)))
-        node.kt_update(symbol, self.alpha)
+        node.kt_update_log2(symbol)
 
 class CTWModel:
     
     freqs_current: float = None
     ctw_tree: CTWTree = None
 
-    def __init__(self, tree_height: int, context: BitArray, alpha: float = 0.5):
+    def __init__(self, tree_height: int, context: BitArray):
         self.freqs_current = Frequencies({0: 1, 1: 1})
-        self.ctw_tree = CTWTree(tree_height=tree_height, past_context=context, alpha=alpha)
+        self.ctw_tree = CTWTree(tree_height=tree_height, past_context=context)
+
+    def convert_log2_prob_to_int(self, p_log2, M=1024):
+        """
+        Convert a float probability to an integer probability
+        :param p: float probability
+        :param M: multiplier
+        :return: integer probability
+        """
+        M_log2 = np.log2(M)
+        p_int = int(2**(p_log2 + M_log2))
+        assert 0 <= p_int/M <= 1, "p must be between 0 and 1"
+        return max(1, p_int)
+    
 
     def update_model(self, symbol: bool):
         self.ctw_tree.update_tree_symbol(symbol)
-        new_dist = {0: convert_float_prob_to_int(self.ctw_tree.get_symbol_prob(0)),
-                    1: convert_float_prob_to_int(self.ctw_tree.get_symbol_prob(1))}
+        new_dist = {0: self.convert_log2_prob_to_int(self.ctw_tree.get_symbol_prob_log2(0)),
+                    1: self.convert_log2_prob_to_int(self.ctw_tree.get_symbol_prob_log2(1))}
         self.freqs_current = Frequencies(new_dist)
 
         aec_params = AECParams() # params used for arithmetic coding in SCL
@@ -166,40 +174,40 @@ def test_ctw_node():
     # TODO: Add logic to test the behavior of CTWNode
     test_node = CTWNode()
 
-# TODO: Add tests with different alpha values
 def test_ctw_tree_generation():
     test_tree = CTWTree(tree_height=3, past_context=BitArray("110"))
     np.testing.assert_almost_equal(
-        test_tree.root.node_prob,
-        1,
+        test_tree.root.node_prob_log2,
+        np.log2(1),
     )
 
     test_tree.update_tree(BitArray("0100110"))
+    test_tree.print_tree()
     np.testing.assert_almost_equal(
-        test_tree.root.node_prob,
-        7/2048,
+        test_tree.root.node_prob_log2,
+        np.log2(7/2048),
     )
 
     test_tree.update_tree_symbol(0)
     np.testing.assert_almost_equal(
-        test_tree.root.node_prob,
-        153/65536,
+        test_tree.root.node_prob_log2,
+        np.log2(153/65536),
     )
 
 def test_ctw_tree_probability():
     test_tree = CTWTree(tree_height=3, past_context=BitArray("110"))
     test_tree.update_tree(BitArray("0100110"))
     np.testing.assert_almost_equal(
-        test_tree.get_symbol_prob(0),
-        (153/65536)/(7/2048)
+        test_tree.get_symbol_prob_log2(0),
+        np.log2((153/65536)/(7/2048))
     )
     np.testing.assert_almost_equal(
-        test_tree.root.node_prob,
-        7/2048,
+        test_tree.root.node_prob_log2,
+        np.log2(7/2048),
     )
     np.testing.assert_almost_equal(
-        test_tree.get_symbol_prob(1),
-        (71/65536)/(7/2048)
+        test_tree.get_symbol_prob_log2(1),
+        np.log2((71/65536)/(7/2048))
     )
 
 def test_ctw_model():
@@ -229,7 +237,7 @@ def test_ctw_model():
 
     # TODO: For DATA_SIZE any larger than ~1000 (e.g. 2000), we get 0 probability
     # Presumably because of floating point precision issues
-    DATA_SIZE = 1000
+    DATA_SIZE = 2000
     np.random.seed(0)
 
     input_seq = [1, 1, 0]
