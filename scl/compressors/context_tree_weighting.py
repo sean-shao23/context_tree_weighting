@@ -111,6 +111,7 @@ class CTWTree():
             node.node_prob = prev_state.node_prob
         self.snapshot = []
 
+    # TODO: This will return 0 probability...that seems bad/wrong?
     def get_symbol_prob(self, symbol: bool):
         self.snapshot = []
         self.get_snapshot = True
@@ -209,6 +210,7 @@ def test_ctw_model():
         # define encoder/decoder models
         # NOTE: important to make a copy, as the encoder updates the model, and we don't want to pass
         # the update model around
+        # TODO: What should the context be, if anything?
         freq_model_enc = CTWModel(3, BitArray("110"))
         freq_model_dec = copy.deepcopy(freq_model_enc)
 
@@ -225,20 +227,39 @@ def test_ctw_model():
 
         return encode_len / data_block.size
 
+    # TODO: For DATA_SIZE any larger than ~1000 (e.g. 2000), we get 0 probability
+    # Presumably because of floating point precision issues
     DATA_SIZE = 1000
-
     np.random.seed(0)
-    input_seq = []
+
+    input_seq = [1, 1, 0]
     for _ in range(DATA_SIZE):
         input_seq.append(np.random.binomial(1, 0.5))
+    input_seq = input_seq[3:]
+
     avg_codelen = compress_sequence(input_seq)
     np.testing.assert_almost_equal(avg_codelen, 1, decimal=1)
 
-    np.random.seed(0)
-    input_seq = [np.random.binomial(1, 0.5)]
+    input_seq = [1, 1, 0]
+    for i in range(DATA_SIZE-1):
+        input_seq.append(input_seq[-1] ^ 1)
+    input_seq = input_seq[3:]
+
+    avg_codelen = compress_sequence(input_seq)
+    np.testing.assert_almost_equal(avg_codelen, 0, decimal=1)
+
+    input_seq = [1, 0, 0, 1, 1, 1, 0]
     for _ in range(DATA_SIZE):
-        input_seq.append(input_seq[-1] ^ 0)
+        input_seq.append(input_seq[-1] ^ input_seq[-2])
+    input_seq = input_seq[7:]
+
+    avg_codelen = compress_sequence(input_seq)
+    np.testing.assert_almost_equal(avg_codelen, 0, decimal=1)
+
+    input_seq = [1, 0, 0, 1, 1, 1, 0]
+    for _ in range(DATA_SIZE):
+        input_seq.append(input_seq[-1] ^ input_seq[-7])
+    input_seq = input_seq[7:]
+
     avg_codelen = compress_sequence(input_seq)
     np.testing.assert_almost_equal(avg_codelen, 1, decimal=1)
-
-    
