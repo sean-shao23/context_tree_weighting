@@ -25,6 +25,9 @@ class CTWNode(BinaryNode):
     here by subclassing we add the fields: a, b, node_prob
     """
 
+    # TODO: Floats are bad. Rather than saving probabilities as floats, save them as ratio of two ints
+    # Denominator should always be a power of 2, so denominator can be stored as log2 of the value
+    # TODO: If we store numerator as log2 as well, we can do log math (subtract instead of divide)
     a: int = 0              # represents number of 0's
     b: int = 0              # represents number of 1's
     kt_prob: float = 1      # represents kt probability for current a, b
@@ -109,7 +112,7 @@ class CTWTree():
             node.node_prob = prev_state.node_prob
         self.snapshot = []
 
-    # TODO: This will return 0 probability...that seems bad/wrong?
+    # TODO: This will return 0 probability...that's bad...is that due to precision issues? Or just the nature of the tree?
     def get_symbol_prob(self, symbol: bool):
         self.snapshot = []
         self.get_snapshot = True
@@ -199,6 +202,13 @@ def test_ctw_tree_probability():
         (71/65536)/(7/2048)
     )
 
+# TODO: Look at tests in Arithmetic Coder and copy them over
+# Can borrow lossless_entropy_coder_test and lossless_test_against_bitrate functions
+
+# TODO: Add test with English source (encode alphabet with ASCII)
+
+# TODO: Add way to "undo" the revert of the tree (so we don't recompute tree we just computed)?
+# Or make a non-overwriting update function for the nodes?
 def test_ctw_model():
     def compress_sequence(sequence: list):
         data_block = DataBlock(sequence)
