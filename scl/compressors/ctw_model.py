@@ -52,7 +52,7 @@ class CTWModel:
         Update the model with the given symbol
         """
         # Update the tree with the given symbol
-        self.ctw_tree.update_tree_symbol(symbol)
+        self.ctw_tree.update_tree([symbol])
         
         # Compute the new symbol probabilities for the CTW tree
         prob_of_zero = self.ctw_tree.get_symbol_prob(0)
@@ -113,9 +113,6 @@ def compress_sequence(sequence: list):
     assert is_lossless
 
     return encode_len / data_block.size
-
-# TODO: Look at tests in Arithmetic Coder and copy them over
-# Can borrow lossless_entropy_coder_test and lossless_test_against_bitrate functions
 
 # TODO: Add test with English source (encode alphabet with ASCII)
 

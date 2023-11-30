@@ -59,6 +59,7 @@ class CTWTree():
 
         for symbol in sequence:
             self.update_tree_symbol(symbol)
+            self.update_context([symbol])
 
     def revert_tree(self):
         """
@@ -130,9 +131,12 @@ class CTWTree():
         # Call recursive function _update_node() to update the nodes of the tree
         self._update_node(node=self.root, context=self.current_context, symbol=next_symbol)
 
-        # Update the context with the symbol we just added to the tree
-        # Remove the oldest symbol from the context
-        self.current_context = self.current_context[1:] + uint_to_bitarray(next_symbol, bit_width=1)
+        
+    def update_context(self, context: list):
+        assert len(context) <= len(self.current_context)
+        # Update the context
+        # Remove the beginning of the context
+        self.current_context = self.current_context[len(context):] + BitArray(context)
 
     def _update_node(self, node: CTWNode, context: str, symbol: bool):
         """
@@ -162,6 +166,8 @@ class CTWTree():
         # Update the node's counts and probabilities
         node.kt_update(symbol)
 
+# TODO: These tests only test with tree depth 3
+# We should probably add tests for other depths
 
 def test_ctw_tree_generation():
     # Depth 3 CTW tree with no symbols (but context of 1, 1, 0) added
@@ -181,6 +187,7 @@ def test_ctw_tree_generation():
     
     # CTW tree after adding symbol 0
     test_tree.update_tree_symbol(0)
+    test_tree.update_context([0])
     np.testing.assert_almost_equal(
         test_tree.get_root_prob(),
         153/65536,

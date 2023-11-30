@@ -130,9 +130,9 @@ class CTWNode(BinaryNode):
         denom = 2 * (n + 1)
 
         # Simply 
-        gcd = np.gcd(num, denom)
-        num //= gcd
-        denom //= gcd
+        # gcd = np.gcd(num, denom)
+        # num //= gcd
+        # denom //= gcd
 
         return num, denom
 
