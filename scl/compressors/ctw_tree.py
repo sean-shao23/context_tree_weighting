@@ -59,7 +59,7 @@ class CTWTree():
 
         for symbol in sequence:
             self.update_tree_symbol(symbol)
-            self.update_context([symbol])
+            self.update_context(uint_to_bitarray(symbol, bit_width=1))
 
     def revert_tree(self):
         """
@@ -132,11 +132,11 @@ class CTWTree():
         self._update_node(node=self.root, context=self.current_context, symbol=next_symbol)
 
         
-    def update_context(self, context: list):
+    def update_context(self, context: BitArray):
         assert len(context) <= len(self.current_context)
         # Update the context
         # Remove the beginning of the context
-        self.current_context = self.current_context[len(context):] + BitArray(context)
+        self.current_context = self.current_context[len(context):] + context
 
     def _update_node(self, node: CTWNode, context: str, symbol: bool):
         """
@@ -187,7 +187,7 @@ def test_ctw_tree_generation():
     
     # CTW tree after adding symbol 0
     test_tree.update_tree_symbol(0)
-    test_tree.update_context([0])
+    test_tree.update_context(BitArray("0"))
     np.testing.assert_almost_equal(
         test_tree.get_root_prob(),
         153/65536,
