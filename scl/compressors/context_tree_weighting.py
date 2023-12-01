@@ -7,6 +7,7 @@ from scl.utils.test_utils import try_lossless_compression
 from scl.utils.tree_utils import BinaryNode
 import copy
 import numpy as np
+import time
 
 class CTWNode(BinaryNode):
     """represents a node of the CTW tree
@@ -43,15 +44,17 @@ class CTWNode(BinaryNode):
         if b < a:
             temp =  a-1 + np.log2(2**(b-a) + 1)
             if 2**(b-a) < 0.001:
+                pass
                 # temp = a-1 + 2**(b-a)
-                print("avg log2:", a, b, 2**(a-b), 2**(b-a), temp)
-                print(self.kt_prob_log2, self.left_child.node_prob_log2 + self.right_child.node_prob_log2)
+                # print("avg log2:", a, b, 2**(a-b), 2**(b-a), temp)
+                # print(self.kt_prob_log2, self.left_child.node_prob_log2 + self.right_child.node_prob_log2)
         else:
             temp =  b-1 + np.log2(2**(a-b) + 1)
             if 2**(a-b) < 0.001:
+                pass
                 # temp = b-1 + 2**(a-b)
-                print("avg log2:", a, b, 2**(a-b), 2**(b-a), temp)
-                print(self.kt_prob_log2, self.left_child.node_prob_log2, self.right_child.node_prob_log2)
+                # print("avg log2:", a, b, 2**(a-b), 2**(b-a), temp)
+                # print(self.kt_prob_log2, self.left_child.node_prob_log2, self.right_child.node_prob_log2)
 
         return temp
 
@@ -156,7 +159,7 @@ class CTWModel:
         self.freqs_current = Frequencies({0: 1, 1: 1})
         self.ctw_tree = CTWTree(tree_height=tree_height, past_context=context)
 
-    def convert_log2_prob_to_int(self, p_log2, M=1024):
+    def convert_log2_prob_to_int(self, p_log2, M=2**16):
         """
         Convert a float probability to an integer probability
         :param p: float probability
@@ -166,12 +169,14 @@ class CTWModel:
         M_log2 = np.log2(M)
         p_int = int(2**(p_log2 + M_log2))
         assert 0 <= p_int/M <= 1, "p must be between 0 and 1"
+        if (p_int <= 0):
+            print(p_log2, M_log2, p_log2 + M_log2, p_int)
         return p_int
         # return max(1, p_int)
     
     def update_model(self, symbol: bool):
         self.ctw_tree.update_tree_symbol(symbol)
-        M = 2048
+        M = 2**16
         prob_zero_log2 = self.ctw_tree.get_symbol_prob_log2(0)
         # print("root prob", prob_zero_log2)
         prob_zero = self.convert_log2_prob_to_int(prob_zero_log2, M)
@@ -255,8 +260,12 @@ def test_ctw_model():
 
     # TODO: For DATA_SIZE any larger than ~1000 (e.g. 2000), we get 0 probability
     # Presumably because of floating point precision issues
-    DATA_SIZE = 2048
+    DATA_SIZE = 2**16
     np.random.seed(0)
+
+    time_taken = []
+
+    start_time = time.time()
 
     input_seq = [1, 1, 0]
     for _ in range(DATA_SIZE):
@@ -264,7 +273,10 @@ def test_ctw_model():
     input_seq = input_seq[3:]
 
     avg_codelen = compress_sequence(input_seq)
+    time_taken.append(time.time() - start_time)
     np.testing.assert_almost_equal(avg_codelen, 1, decimal=1)
+
+    start_time = time.time()
 
     input_seq = [1, 1, 0]
     for i in range(DATA_SIZE-1):
@@ -272,7 +284,10 @@ def test_ctw_model():
     input_seq = input_seq[3:]
 
     avg_codelen = compress_sequence(input_seq)
+    time_taken.append(time.time() - start_time)
     np.testing.assert_almost_equal(avg_codelen, 0, decimal=1)
+
+    start_time = time.time()
 
     input_seq = [1, 0, 0, 1, 1, 1, 0]
     for _ in range(DATA_SIZE):
@@ -280,7 +295,10 @@ def test_ctw_model():
     input_seq = input_seq[7:]
 
     avg_codelen = compress_sequence(input_seq)
+    time_taken.append(time.time() - start_time)
     np.testing.assert_almost_equal(avg_codelen, 0, decimal=1)
+
+    start_time = time.time()
 
     input_seq = [1, 0, 0, 1, 1, 1, 0]
     for _ in range(DATA_SIZE):
@@ -288,4 +306,7 @@ def test_ctw_model():
     input_seq = input_seq[7:]
 
     avg_codelen = compress_sequence(input_seq)
+    time_taken.append(time.time() - start_time)
     np.testing.assert_almost_equal(avg_codelen, 1, decimal=1)
+
+    print("Average time (ms) per bit:", 1000*sum(time_taken)/len(time_taken)/DATA_SIZE)
