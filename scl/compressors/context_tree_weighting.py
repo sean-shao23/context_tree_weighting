@@ -40,7 +40,20 @@ class CTWNode(BinaryNode):
 
     def average_log2(self, a: float, b: float) -> float:
         # return np.log2(0.5 * (2**a + 2**b)) using some funky math
-        return a-1 + np.log2(2**(b-a) + 1)
+        if b < a:
+            temp =  a-1 + np.log2(2**(b-a) + 1)
+            if 2**(b-a) < 0.001:
+                # temp = a-1 + 2**(b-a)
+                print("avg log2:", a, b, 2**(a-b), 2**(b-a), temp)
+                print(self.kt_prob_log2, self.left_child.node_prob_log2 + self.right_child.node_prob_log2)
+        else:
+            temp =  b-1 + np.log2(2**(a-b) + 1)
+            if 2**(a-b) < 0.001:
+                # temp = b-1 + 2**(a-b)
+                print("avg log2:", a, b, 2**(a-b), 2**(b-a), temp)
+                print(self.kt_prob_log2, self.left_child.node_prob_log2, self.right_child.node_prob_log2)
+
+        return temp
 
     def pr_prob_log2(self, nx: int, n: int) -> float:
         return np.log2(nx + 0.5) - np.log2(n + 1)
@@ -113,6 +126,7 @@ class CTWTree():
         context_prob_log2 = self.root.node_prob_log2
         self._update_node(node=self.root, context=self.current_context, symbol=symbol)
         symbol_context_prob_log2 = self.root.node_prob_log2
+        # print("new and old probs (log2)", symbol_context_prob_log2, context_prob_log2)
         symbol_prob_log2 = symbol_context_prob_log2 - context_prob_log2
         self.revert_tree()
         self.get_snapshot = False
@@ -152,13 +166,17 @@ class CTWModel:
         M_log2 = np.log2(M)
         p_int = int(2**(p_log2 + M_log2))
         assert 0 <= p_int/M <= 1, "p must be between 0 and 1"
-        return max(1, p_int)
+        return p_int
+        # return max(1, p_int)
     
-
     def update_model(self, symbol: bool):
         self.ctw_tree.update_tree_symbol(symbol)
-        new_dist = {0: self.convert_log2_prob_to_int(self.ctw_tree.get_symbol_prob_log2(0)),
-                    1: self.convert_log2_prob_to_int(self.ctw_tree.get_symbol_prob_log2(1))}
+        M = 2048
+        prob_zero_log2 = self.ctw_tree.get_symbol_prob_log2(0)
+        # print("root prob", prob_zero_log2)
+        prob_zero = self.convert_log2_prob_to_int(prob_zero_log2, M)
+        new_dist = {0: prob_zero,
+                    1: M-prob_zero}
         self.freqs_current = Frequencies(new_dist)
 
         aec_params = AECParams() # params used for arithmetic coding in SCL
@@ -237,7 +255,7 @@ def test_ctw_model():
 
     # TODO: For DATA_SIZE any larger than ~1000 (e.g. 2000), we get 0 probability
     # Presumably because of floating point precision issues
-    DATA_SIZE = 2000
+    DATA_SIZE = 2048
     np.random.seed(0)
 
     input_seq = [1, 1, 0]
