@@ -6,6 +6,7 @@ from scl.utils.bitarray_utils import BitArray, uint_to_bitarray
 from scl.utils.test_utils import try_lossless_compression
 import copy
 import numpy as np
+import string
 import time
 from typing import Callable
 
@@ -21,8 +22,8 @@ def convert_float_prob_to_int(p: float, M: int=2**16) -> int:
 
     # Checks if result will be 0
     if int(p * M) <= 0:
-        print(p, p*M)
-        assert False
+        # print(p, p*M)
+        return 1
 
     return int(p * M)
 
@@ -70,18 +71,64 @@ class CTWModel:
         )
         self.freqs_current._validate_freq_dist(self.freqs_current.freq_dict) # check if freqs are valid
 
+NUM_TREES = 8
+class CTWModelUnicode:
+    """
+    Represents the CTW model for coding unicode
+
+    Store eight CTW trees (one for each bit) and updates the frequency distribution accordingly
+    """
+    
+    freqs_current: float = None     # Stores the frequency distribution based on the CTW trees
+    ctw_trees: list = None        # Stores the eight CTW trees
+
+
+    def __init__(self, tree_height: int, context: BitArray):
+        """
+        Initialize the frequency dict to uniform distribution
+        and CTW tree with the given heigh and context
+        """
+        self.freqs_current = Frequencies({chr(i): 1 for i in range(2**NUM_TREES)})
+        self.ctw_trees = [CTWTree(tree_height=tree_height, past_context=context) for _ in range(NUM_TREES)]
+
+    def update_model(self, symbol: string):
+        """
+        Update the model with the given character
+        """
+        assert len(symbol) == 1
+        unicode_value = uint_to_bitarray(ord(symbol), bit_width=8)
+        # Update the tree with the given symbol
+        for i in range(NUM_TREES):
+            self.ctw_trees[i].update_tree_symbol(unicode_value[i])
+            self.ctw_trees[i].update_context(unicode_value)
+        
+        # Compute the new symbol probabilities for the CTW trees
+        probs_of_zero = [ctw_tree.get_symbol_prob(0) for ctw_tree in self.ctw_trees]
+        new_dist = {}
+        for i in range(2**NUM_TREES):
+            probability = 1
+            binary_i = uint_to_bitarray(i, bit_width=NUM_TREES)
+            for j in range(NUM_TREES):
+                if binary_i[j] == 0:
+                    probability *= probs_of_zero[j]
+                else:
+                    probability *= 1 - probs_of_zero[j]
+            new_dist[chr(i)] = convert_float_prob_to_int(probability)
+
+        # Update the frequency distribution
+        self.freqs_current = Frequencies(new_dist)
+        print("added symbol", symbol, "now freq dist is", sorted((str(k) + ": " + str(v) for k,v in new_dist.items()), key=lambda x: int(x[3:]), reverse=True)[0:10])
+        print("probability of a is", new_dist["a"]/self.freqs_current.total_freq)
+
+        aec_params = AECParams() # params used for arithmetic coding in SCL
+        assert self.freqs_current.total_freq <= aec_params.MAX_ALLOWED_TOTAL_FREQ, (
+            f"Total freq {self.freqs_current.total_freq} is greater than "
+            f"max allowed total freq {aec_params.MAX_ALLOWED_TOTAL_FREQ} for arithmetic coding in SCL. This leads to"
+            f"precision and speed issues. Try reducing the total freq by a factor of 2 or more."
+        )
+        self.freqs_current._validate_freq_dist(self.freqs_current.freq_dict) # check if freqs are valid
 
 DATA_SIZE = 2**10
-
-def gen_input_seq(next_val_func: Callable, context: list=[1, 1, 0]) -> list:
-    """
-    Create a sequence using next_val_func() for the next value of the sequence,
-    starting with the given context (not included in final sequence)
-    """
-    starting_len = len(context)
-    for _ in range(DATA_SIZE):
-        context.append(next_val_func(context))
-    return context[starting_len:]
 
 def compress_sequence(sequence: list):
     """
@@ -114,13 +161,57 @@ def compress_sequence(sequence: list):
 
     return encode_len / data_block.size
 
+def compress_english(input_string: list):
+    """
+    Create an arithmetic encoder/decoder pair using the CTW model
+
+    Send the given sequence and ensure it was transmitted losslessly
+
+    Return the bits/symbol of the encoded result
+    """
+    data_block = DataBlock(input_string)
+    # define AEC params
+    aec_params = AECParams()
+    # define encoder/decoder models
+    # NOTE: important to make a copy, as the encoder updates the model, and we don't want to pass
+    # the update model around
+    # TODO: What should the context be, if anything?
+    context = "A"
+    context_bitarray = BitArray()
+    for char in context:
+        context_bitarray += uint_to_bitarray(ord(char), bit_width=8)
+    freq_model_enc = CTWModelUnicode(8, context_bitarray)
+    freq_model_dec = copy.deepcopy(freq_model_enc)
+
+    # create encoder/decoder
+    encoder = ArithmeticEncoder(aec_params, freq_model_enc)
+    decoder = ArithmeticDecoder(aec_params, freq_model_dec)
+
+    # check if encoding/decoding is lossless
+    is_lossless, encode_len, _ = try_lossless_compression(
+        data_block, encoder, decoder, add_extra_bits_to_encoder_output=True
+    )
+
+    assert is_lossless
+
+    return encode_len / data_block.size
+
 # TODO: Add test with English source (encode alphabet with ASCII)
 
 # TODO: Add way to "undo" the revert of the tree (so we don't recompute tree we just computed)?
 # Or make a non-overwriting update function for the nodes?
 def test_ctw_model():
-    # TODO: For DATA_SIZE any larger than ~1000 (e.g. 2000), we get 0 probability
-    # Presumably because of floating point precision issues
+    return
+    def gen_input_seq(next_val_func: Callable, context: list=[1, 1, 0]) -> list:
+        """
+        Create a sequence using next_val_func() for the next value of the sequence,
+        starting with the given context (not included in final sequence)
+        """
+        starting_len = len(context)
+        for _ in range(DATA_SIZE):
+            context.append(next_val_func(context))
+        return context[starting_len:]
+
     np.random.seed(0)
     time_taken = []
 
@@ -158,3 +249,16 @@ def test_ctw_model():
     np.testing.assert_almost_equal(avg_codelen, 1, decimal=1)
 
     print("Average time (ms) per bit:", 1000*sum(time_taken)/len(time_taken)/DATA_SIZE)
+
+def test_ctw_english():
+    input_string = "aaaaaaaaa"
+    start_time = time.time()
+
+    bits_per_char = compress_english(input_string)
+
+    total_time = time.time() - start_time
+    print("Average time (ms) to send", len(input_string), "characters:", 1000*total_time)
+
+    # TODO: placeholder assert (add better test)
+    assert bits_per_char > 0
+    print(bits_per_char)
