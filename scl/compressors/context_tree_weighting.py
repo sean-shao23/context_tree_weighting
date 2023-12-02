@@ -41,6 +41,7 @@ class CTWNode(BinaryNode):
 
     def average_log2(self, a: float, b: float) -> float:
         # return np.log2(0.5 * (2**a + 2**b)) using some funky math
+        # TODO: magnitude of a is becoming so large (eg -1000) that 2**(a-b) becomes -inf 
         if b < a:
             temp =  a-1 + np.log2(2**(b-a) + 1)
             if 2**(b-a) < 0.001:
@@ -114,11 +115,7 @@ class CTWTree():
     def revert_tree(self):
         for node, prev_state in self.snapshot:
             assert type(node) == CTWNode
-            assert type(prev_state) == CTWNode
-            node.a = prev_state.a
-            node.b = prev_state.b
-            node.kt_prob_log2 = prev_state.kt_prob_log2
-            node.node_prob_log2 = prev_state.node_prob_log2
+            node.a, node.b, node.kt_prob_log2, node.node_prob_log2 = prev_state
         self.snapshot = []
 
     # TODO: This sometimes returns probability 0
@@ -142,12 +139,12 @@ class CTWTree():
     def _update_node(self, node: CTWNode, context: str, symbol: bool):
         if len(context) == 0:
             if self.get_snapshot:
-                self.snapshot.append((node, copy.deepcopy(node)))
+                self.snapshot.append((node, (node.a, node.b, node.kt_prob_log2, node.node_prob_log2)))
             node.kt_update_log2(symbol)
             return
         self._update_node(node=node.get_child(context[-1]), context=context[:-1], symbol=symbol)
         if self.get_snapshot:
-            self.snapshot.append((node, copy.deepcopy(node)))
+            self.snapshot.append((node, (node.a, node.b, node.kt_prob_log2, node.node_prob_log2)))
         node.kt_update_log2(symbol)
 
 class CTWModel:
