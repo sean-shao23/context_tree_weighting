@@ -54,11 +54,13 @@ class CTWTree():
     def update_tree(self, sequence: BitArray):
         """
         Update the CTW tree with the given sequence of symbols
+        and update the context accordingly
         """
 
         for symbol in sequence:
             self.update_tree_symbol(symbol)
-            self.update_context(uint_to_bitarray(symbol, bit_width=1))
+
+        self.update_context(sequence)
 
     def revert_tree(self):
         """
@@ -114,48 +116,27 @@ class CTWTree():
 
     def update_tree_symbol(self, next_symbol: bool):
         """
-        Update the CTW tree with the given symbol
-
-        P(symbol | context) = P(symbol, context) / P(context)
+        Update the CTW tree with the given symbol by traversing the branch corresponding to the current context
+        starting from the leaf node of the branch and updating the nodes towards the root
         """
-
-        # Call recursive function _update_node() to update the nodes of the tree
         self._update_node(node=self.root, context=self.current_context, symbol=next_symbol)
-
+    
+    def _update_node(self, node: CTWNode, context: str, symbol: bool):
+        if len(context) == 0:
+            if self.get_snapshot:
+                self.snapshot.append((node, (node.a, node.b, node.kt_prob_log2, node.node_prob_log2)))
+            node.kt_update_log2(symbol)
+            return
+        self._update_node(node=node.get_child(context[-1]), context=context[:-1], symbol=symbol)
+        if self.get_snapshot:
+            self.snapshot.append((node, (node.a, node.b, node.kt_prob_log2, node.node_prob_log2)))
+        node.kt_update_log2(symbol)
         
     def update_context(self, context: BitArray):
         assert len(context) <= len(self.current_context)
         # Update the context
         # Remove the beginning of the context
         self.current_context = self.current_context[len(context):] + context
-
-    def _update_node(self, node: CTWNode, context: str, symbol: bool):
-        """
-        First update the children of the given node
-        then update the node itself
-
-        We traverse the tree according to the context, so only the path of the tree
-        corresponding to the context needs to be update
-        """
-        # If the context length is 0, this a leaf node
-        if len(context) == 0:
-            # Add node to snapshot (if needed)
-            if self.get_snapshot:
-                self.snapshot.append((node, (node.a, node.b, node.kt_prob_log2, node.node_prob_log2)))
-
-            # Update the node's counts and probabilities
-            node.kt_update_log2(symbol)
-            return
-
-        # Update the corresponding child (based on what's left of the context to traverse)
-        self._update_node(node=node.get_child(context[-1]), context=context[:-1], symbol=symbol)
-
-        # Add node to snapshot (if needed)
-        if self.get_snapshot:
-            self.snapshot.append((node, (node.a, node.b, node.kt_prob_log2, node.node_prob_log2)))
-
-        # Update the node's counts and probabilities
-        node.kt_update_log2(symbol)
 
 # TODO: These tests only test with tree depth 3
 # We should probably add tests for other depths
