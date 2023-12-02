@@ -1,37 +1,44 @@
-from scl.utils.bitarray_utils import BitArray, uint_to_bitarray
-from scl.compressors.arithmetic_coding import (
-    AECParams,
-    ArithmeticDecoder,
-    ArithmeticEncoder
-)
-from scl.compressors.ctw_model import (
-    CTWModel,
-    compress_sequence
-)
-from scl.compressors.huffman_coder import (
-    HuffmanEncoder,
-    HuffmanDecoder,
-)
-from scl.compressors.lz77 import (
-    LZ77Encoder,
-    LZ77Decoder,
-)
+from scl.compressors.arithmetic_coding import AECParams, ArithmeticDecoder, ArithmeticEncoder
+from scl.compressors.ctw_model import CTWModel, compress_sequence
+from scl.core.prob_dist import Frequencies
 from scl.compressors.probability_models import (
     AdaptiveIIDFreqModel,
 )
 from scl.core.data_block import DataBlock
-from scl.core.data_encoder_decoder import DataDecoder, DataEncoder
-from scl.core.prob_dist import Frequencies, ProbabilityDist
+from scl.core.prob_dist import ProbabilityDist, get_avg_neg_log_prob
+from scl.utils.bitarray_utils import BitArray, uint_to_bitarray
 from scl.utils.test_utils import (
-    try_lossless_compression, 
     lossless_entropy_coder_test,
+    create_random_binary_file,
+    try_file_lossless_compression,
     lossless_test_against_expected_bitrate,
 )
-
+from scl.compressors.huffman_coder import (
+    HuffmanNode,
+    HuffmanTree,
+    HuffmanEncoder,
+    HuffmanDecoder,
+    test_huffman_coding_dyadic,
+)
+import tempfile
+from scl.core.data_encoder_decoder import DataDecoder, DataEncoder
+from scl.compressors.lz77 import (
+    LZ77Sequence,
+    EmpiricalIntHuffmanEncoder,
+    EmpiricalIntHuffmanDecoder,
+    LogScaleBinnedIntegerEncoder,
+    LogScaleBinnedIntegerDecoder,
+    LZ77StreamsEncoder,
+    LZ77StreamsDecoder,
+    LZ77Encoder,
+    LZ77Decoder,
+)
+from scl.utils.test_utils import get_random_data_block, try_lossless_compression
 import copy
 from math import log2
 import numpy as np
 import time
+import os
 
 def gen_kth_order_markov_seq(k: int, num_samples: int, seed: int = 0):
     """generate a 2nd order Markov distribution for testing.
@@ -90,7 +97,6 @@ def test_adaptive_order_k_arithmetic_coding():
 
 
 def test_huffman_encoding():
-    return
     """
     Test Huffman encoder to compare with CTW
     """
@@ -172,7 +178,6 @@ def test_huffman_encoding():
         assert output_len == NUM_SAMPLES
 
 def test_lz77_multiblock_file_encode_decode():
-    return
     """full test for LZ77Encoder and LZ77Decoder
 
     - create a sample file
@@ -180,7 +185,6 @@ def test_lz77_multiblock_file_encode_decode():
     - perform decoding and check if the compression was lossless
 
     """
-
     NUM_SAMPLES = 2**16
 
     initial_window = [44, 45, 46] * 5
@@ -191,6 +195,7 @@ def test_lz77_multiblock_file_encode_decode():
     with tempfile.TemporaryDirectory() as tmpdirname:
         # create a file with some random data
         input_file_path = os.path.join(tmpdirname, "inp_file.txt")
+        prob_dist = ProbabilityDist({44: 0.5, 45: 0.25, 46: 0.2, 255: 0.05})
         create_random_binary_file(
             input_file_path,
             file_size=500,
@@ -211,14 +216,13 @@ def test_lz77_multiblock_file_encode_decode():
 
 
 def test_adaptive_arithmetic_coding():
-    return
     """
     Test if AEC coding is working as expcted for different parameter settings
     - Check if encoding/decodng is lossless
     - Check if the compression is close to optimal
     """
 
-    NUM_SAMPLES = 2**16
+    NUM_SAMPLES = 1000
 
     # trying out some random frequencies/aec_parameters
     data_freqs_list = [
@@ -281,7 +285,7 @@ def test_adaptive_arithmetic_coding():
             avg_log_prob = get_avg_neg_log_prob(prob_dist, data_block)
 
             # check if encoding/decoding is lossless
-            strt_time_adaptive = time.time()
+            start_time_adaptive = time.time()
             is_lossless, encode_len, _ = try_lossless_compression(
                 data_block, encoder, decoder, add_extra_bits_to_encoder_output=True
             )
