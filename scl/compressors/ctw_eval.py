@@ -215,6 +215,27 @@ def test_lz77_multiblock_file_encode_decode():
 
     """
 
+    def _generate_kth_order_markov(k: int, num_samples: int, seed: int = 0):
+        """generate a 2nd order Markov distribution for testing.
+
+        Defined on alphabet {0,1,2}, the distribution is defined like
+        X_n = X_{n-1} + X_{n-2} + Ber(1/2) mod 3
+
+        The entropy rate is 1 bit/symbol.
+
+        The stationary distribution is the uniform distribution.
+        """
+        assert num_samples > k
+        rng = np.random.default_rng(seed)
+        # TODO: change to range 0-to-1 so the probability isnt hardcoded to 0.3
+        random_bits = rng.choice(10, size=num_samples - k)
+        markov_samples = np.zeros(num_samples, dtype=int)
+        markov_samples[0] = rng.choice(2)
+        markov_samples[1] = rng.choice(2)
+        for i in range(2, num_samples):
+            markov_samples[i] = (markov_samples[i - 1] + markov_samples[i - k] + (random_bits[i - k] < 3)) % 2
+        return markov_samples
+
     NUM_SAMPLES = 2**16
 
     initial_window = [44, 45, 46] * 5
@@ -251,6 +272,27 @@ def test_adaptive_arithmetic_coding():
     - Check if encoding/decodng is lossless
     - Check if the compression is close to optimal
     """
+
+    def _generate_kth_order_markov(k: int, num_samples: int, seed: int = 0):
+        """generate a 2nd order Markov distribution for testing.
+
+        Defined on alphabet {0,1,2}, the distribution is defined like
+        X_n = X_{n-1} + X_{n-2} + Ber(1/2) mod 3
+
+        The entropy rate is 1 bit/symbol.
+
+        The stationary distribution is the uniform distribution.
+        """
+        assert num_samples > k
+        rng = np.random.default_rng(seed)
+        # TODO: change to range 0-to-1 so the probability isnt hardcoded to 0.3
+        random_bits = rng.choice(10, size=num_samples - k)
+        markov_samples = np.zeros(num_samples, dtype=int)
+        markov_samples[0] = rng.choice(2)
+        markov_samples[1] = rng.choice(2)
+        for i in range(2, num_samples):
+            markov_samples[i] = (markov_samples[i - 1] + markov_samples[i - k] + (random_bits[i - k] < 3)) % 2
+        return markov_samples
 
     NUM_SAMPLES = 1000
 
