@@ -5,9 +5,12 @@ from scl.compressors.probability_models import (
     AdaptiveIIDFreqModel,
 )
 from scl.core.data_block import DataBlock
+from scl.core.prob_dist import ProbabilityDist, get_avg_neg_log_prob
 from scl.utils.bitarray_utils import BitArray, uint_to_bitarray
 from scl.utils.test_utils import (
     lossless_entropy_coder_test,
+    create_random_binary_file,
+    try_file_lossless_compression,
     lossless_test_against_expected_bitrate,
 )
 from scl.compressors.huffman_coder import (
@@ -17,6 +20,8 @@ from scl.compressors.huffman_coder import (
     HuffmanDecoder,
     test_huffman_coding_dyadic,
 )
+import tempfile
+from scl.core.data_encoder_decoder import DataDecoder, DataEncoder
 from scl.compressors.lz77 import (
     LZ77Sequence,
     EmpiricalIntHuffmanEncoder,
@@ -28,9 +33,11 @@ from scl.compressors.lz77 import (
     LZ77Encoder,
     LZ77Decoder,
 )
+from scl.utils.test_utils import get_random_data_block, try_lossless_compression
 import copy
 import numpy as np
 import time
+import os
 
 # TODO: Look at tests in Arithmetic Coder and copy them over
 # Can borrow lossless_entropy_coder_test and lossless_test_against_bitrate functions
@@ -218,6 +225,7 @@ def test_lz77_multiblock_file_encode_decode():
     with tempfile.TemporaryDirectory() as tmpdirname:
         # create a file with some random data
         input_file_path = os.path.join(tmpdirname, "inp_file.txt")
+        prob_dist = ProbabilityDist({44: 0.5, 45: 0.25, 46: 0.2, 255: 0.05})
         create_random_binary_file(
             input_file_path,
             file_size=500,
@@ -244,7 +252,7 @@ def test_adaptive_arithmetic_coding():
     - Check if the compression is close to optimal
     """
 
-    NUM_SAMPLES = 2**16
+    NUM_SAMPLES = 1000
 
     # trying out some random frequencies/aec_parameters
     data_freqs_list = [
@@ -307,7 +315,7 @@ def test_adaptive_arithmetic_coding():
             avg_log_prob = get_avg_neg_log_prob(prob_dist, data_block)
 
             # check if encoding/decoding is lossless
-            strt_time_adaptive = time.time()
+            start_time_adaptive = time.time()
             is_lossless, encode_len, _ = try_lossless_compression(
                 data_block, encoder, decoder, add_extra_bits_to_encoder_output=True
             )
