@@ -59,8 +59,7 @@ class CTWTree():
 
         for symbol in sequence:
             self.update_tree_symbol(symbol)
-
-        self.update_context(sequence)
+            self.update_context([symbol])
 
     def revert_tree(self):
         """

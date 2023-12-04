@@ -1,11 +1,14 @@
 from scl.compressors.arithmetic_coding import AECParams, ArithmeticDecoder, ArithmeticEncoder
 from scl.compressors.ctw_model import CTWModel, compress_sequence
-from scl.core.prob_dist import Frequencies
+from scl.compressors.huffman_coder import (
+    HuffmanEncoder,
+    HuffmanDecoder,
+)
 from scl.compressors.probability_models import (
     AdaptiveIIDFreqModel,
 )
 from scl.core.data_block import DataBlock
-from scl.core.prob_dist import ProbabilityDist, get_avg_neg_log_prob
+from scl.core.prob_dist import Frequencies, ProbabilityDist, get_avg_neg_log_prob
 from scl.utils.bitarray_utils import BitArray, uint_to_bitarray
 from scl.utils.test_utils import (
     lossless_entropy_coder_test,
@@ -13,52 +16,34 @@ from scl.utils.test_utils import (
     try_file_lossless_compression,
     lossless_test_against_expected_bitrate,
 )
-from scl.compressors.huffman_coder import (
-    HuffmanNode,
-    HuffmanTree,
-    HuffmanEncoder,
-    HuffmanDecoder,
-    test_huffman_coding_dyadic,
-)
-import tempfile
 from scl.core.data_encoder_decoder import DataDecoder, DataEncoder
 from scl.compressors.lz77 import (
-    LZ77Sequence,
-    EmpiricalIntHuffmanEncoder,
-    EmpiricalIntHuffmanDecoder,
-    LogScaleBinnedIntegerEncoder,
-    LogScaleBinnedIntegerDecoder,
-    LZ77StreamsEncoder,
-    LZ77StreamsDecoder,
     LZ77Encoder,
     LZ77Decoder,
 )
 from scl.utils.test_utils import get_random_data_block, try_lossless_compression
+
 import copy
 from math import log2
 import numpy as np
+import tempfile
 import time
 import os
 
-def gen_kth_order_markov_seq(k: int, num_samples: int, seed: int = 0):
-    """generate a 2nd order Markov distribution for testing.
+def gen_kth_order_markov_seq(k: int, num_samples: int, prob_bit_flip: float=0.5, seed: int=0):
+    """generate a kth order Markov distribution for testing.
 
-    Defined on alphabet {0,1,2}, the distribution is defined like
-    X_n = X_{n-1} + X_{n-2} + Ber(1/2) mod 3
-
-    The entropy rate is 1 bit/symbol.
-
-    The stationary distribution is the uniform distribution.
+    Defined on alphabet {0, 1}, the distribution is defined like
+    X_n = X_{n-1} + X_{n-k} + Ber(prob_bit_flip) mod 2
     """
-    assert num_samples > k
-    rng = np.random.default_rng(seed)
-    # TODO: change to range 0-to-1 so the probability isnt hardcoded to 0.3
-    random_bits = rng.choice(10, size=num_samples - k)
+    assert num_samples >= k
+    np.random.seed(seed)
+
     markov_samples = np.zeros(num_samples, dtype=int)
-    markov_samples[0] = rng.choice(2)
-    markov_samples[1] = rng.choice(2)
-    for i in range(2, num_samples):
-        markov_samples[i] = (markov_samples[i - 1] + markov_samples[i - k] + (random_bits[i - k] < 3)) % 2
+    markov_samples[0:k] = np.random.randint(0, 2, k)
+    random_bits = np.random.rand(num_samples - k)
+    for i in range(k, num_samples):
+        markov_samples[i] = (markov_samples[i - 1] + markov_samples[i - k] + (random_bits[i - k] < prob_bit_flip)) % 2
     return markov_samples
 
 # TODO: Look at tests in Arithmetic Coder and copy them over
@@ -83,7 +68,7 @@ def test_adaptive_order_k_arithmetic_coding():
     DATA_SIZE = 2**16
 
     start_time = time.time()
-    markov_seq = gen_kth_order_markov_seq(3, DATA_SIZE)
+    markov_seq = gen_kth_order_markov_seq(3, DATA_SIZE, 0.3)
     time_taken = time.time() - start_time
     print("generating input took", time_taken, "(ms)")
 
