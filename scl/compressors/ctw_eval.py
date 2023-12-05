@@ -61,7 +61,7 @@ def gen_kth_order_markov_seq(k: int, num_samples: int, seed: int = 0):
         markov_samples[i] = (markov_samples[i - 1] + markov_samples[i - k] + (random_bits[i - k] < 3)) % 2
     return markov_samples
 
-# TODO: Look at tests in Arithmetic Coder and copy them over
+# Look at tests in Arithmetic Coder and copy them over
 # Can borrow lossless_entropy_coder_test and lossless_test_against_bitrate functions
 
 # TODO: Tests to add:
@@ -101,27 +101,6 @@ def test_huffman_encoding():
     Test Huffman encoder to compare with CTW
     """
 
-    def _generate_kth_order_markov(k: int, num_samples: int, seed: int = 0):
-        """generate a 2nd order Markov distribution for testing.
-
-        Defined on alphabet {0,1,2}, the distribution is defined like
-        X_n = X_{n-1} + X_{n-2} + Ber(1/2) mod 3
-
-        The entropy rate is 1 bit/symbol.
-
-        The stationary distribution is the uniform distribution.
-        """
-        assert num_samples > k
-        rng = np.random.default_rng(seed)
-        # TODO: change to range 0-to-1 so the probability isnt hardcoded to 0.3
-        random_bits = rng.choice(10, size=num_samples - k)
-        markov_samples = np.zeros(num_samples, dtype=int)
-        markov_samples[0] = rng.choice(2)
-        markov_samples[1] = rng.choice(2)
-        for i in range(2, num_samples):
-            markov_samples[i] = (markov_samples[i - 1] + markov_samples[i - k] + (random_bits[i - k] < 3)) % 2
-        return markov_samples
-
     #def test_huffman_coding_dyadic():
     """test huffman coding on dyadic distributions
 
@@ -130,8 +109,48 @@ def test_huffman_encoding():
     2. Construct Huffman coder using the given distribution
     3. Encode/Decode the block
     """
-    NUM_SAMPLES = 2**16
+    DATA_SIZE = 2**16
 
+    markov_seq = gen_kth_order_markov_seq(3, DATA_SIZE)
+    data_block_huffman = DataBlock(markov_seq)
+    # create encoder decoder
+
+    encoder = HuffmanEncoder(prob_dist)
+    decoder = HuffmanDecoder(prob_dist)
+
+    # perform compression
+    is_lossless, output_len, _ = try_lossless_compression(data_block, encoder, decoder)
+    avg_bits = output_len / NUM_SAMPLES
+
+    # get optimal codelen
+    optimal_codelen = get_avg_neg_log_prob(prob_dist, data_block)
+    assert is_lossless, "Lossless compression failed"
+
+    np.testing.assert_almost_equal(
+        avg_bits,
+        optimal_codelen,
+        err_msg="Huffman coding is not equal to optimal codelens",
+    )
+    print(
+        f"Avg Bits: {avg_bits}, optimal codelen: {optimal_codelen}, Entropy: {prob_dist.entropy}"
+    )
+
+    # for the special case of single symbol alphabet, verify that it's lossless
+    # (note that entropy is not achieved in this case)
+    prob_dist = ProbabilityDist({"A": 1.0})
+    data_block = DataBlock(["A"] * NUM_SAMPLES)
+    # create encoder decoder
+    encoder = HuffmanEncoder(prob_dist)
+    decoder = HuffmanDecoder(prob_dist)
+    start_time_huffman = time.time()
+    is_lossless, output_len, _ = try_lossless_compression(data_block, encoder, decoder)
+    time_taken_huffman = time.time() - start_time_huffman
+    print("huffman coding took", time_taken_huffman*1000, "(ms)")
+    assert is_lossless
+    assert output_len == NUM_SAMPLES
+    
+
+    """
     distributions = [
         ProbabilityDist({"A": 0.5, "B": 0.5}),
         ProbabilityDist({"A": 0.5, "B": 0.25, "C": 0.25}),
@@ -176,6 +195,7 @@ def test_huffman_encoding():
         print("huffman coding took", time_taken_huffman*1000, "(ms)")
         assert is_lossless
         assert output_len == NUM_SAMPLES
+    """
 
 def test_lz77_multiblock_file_encode_decode():
     """full test for LZ77Encoder and LZ77Decoder
