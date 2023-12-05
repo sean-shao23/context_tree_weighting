@@ -1,5 +1,7 @@
 from scl.compressors.ctw_node import CTWNode
 from scl.utils.bitarray_utils import BitArray, uint_to_bitarray
+
+from collections import deque
 import numpy as np
 
 # TODO: Original paper describes storage complexity as linear in D...but the size of the tree is ~ 2^D
@@ -23,10 +25,19 @@ class CTWTree():
 
         assert len(past_context) == tree_height
 
-        self.current_context = past_context
+        self.current_context = deque(past_context, maxlen=tree_height)
 
-        # Call recursive function self.gen_tree() to populate the nodes of the tree
-        self.root = self.gen_tree(depth=tree_height, node_context=BitArray())
+        # Populate the nodes of the tree
+        root = CTWNode(id=BitArray())
+        queue = deque([(root, tree_height)])
+        while queue:
+            node, depth = queue.popleft()
+            if depth > 0:
+                node.left_child = CTWNode(id=node.id + BitArray("0"))
+                node.right_child = CTWNode(id=node.id + BitArray("1"))
+                queue.append((node.left_child, depth - 1))
+                queue.append((node.right_child, depth - 1))
+        self.root = root
 
     def print_tree(self):
         """
@@ -34,22 +45,6 @@ class CTWTree():
         """
 
         self.root.print_node()
-
-    def gen_tree(self, depth: int, node_context: BitArray) -> CTWNode:
-        """
-        Generate the subtree of given depth
-        """
-
-        # If depth is 0, node has no children (is a leaf of the CTW tree)
-        if depth == 0:
-            return CTWNode(id=node_context, left_child=None, right_child=None)
-        
-        # Generate the left and right subtrees
-        left_child = self.gen_tree(depth=depth-1, node_context=node_context + BitArray("0"))
-        right_child = self.gen_tree(depth=depth-1, node_context=node_context + BitArray("1"))
-
-        # Create the root node for this subtree
-        return CTWNode(id=node_context, left_child=left_child, right_child=right_child)
     
     def update_tree(self, sequence: BitArray):
         """
@@ -118,7 +113,8 @@ class CTWTree():
         Update the CTW tree with the given symbol by traversing the branch corresponding to the current context
         starting from the leaf node of the branch and updating the nodes towards the root
         """
-        self._update_node(node=self.root, context=self.current_context, symbol=next_symbol)
+        assert next_symbol == 0 or next_symbol == 1
+        self._update_node(node=self.root, context=list(self.current_context), symbol=next_symbol)
     
     def _update_node(self, node: CTWNode, context: str, symbol: bool):
         if len(context) == 0:
@@ -126,7 +122,10 @@ class CTWTree():
                 self.snapshot.append((node, (node.a, node.b, node.kt_prob_log2, node.node_prob_log2)))
             node.kt_update_log2(symbol)
             return
-        self._update_node(node=node.get_child(context[-1]), context=context[:-1], symbol=symbol)
+        latest_context_symbol = context[-1]
+        context.pop()
+        self._update_node(node=node.get_child(latest_context_symbol), context=context, symbol=symbol)
+        context.append(latest_context_symbol)
         if self.get_snapshot:
             self.snapshot.append((node, (node.a, node.b, node.kt_prob_log2, node.node_prob_log2)))
         node.kt_update_log2(symbol)
@@ -135,7 +134,7 @@ class CTWTree():
         assert len(context) <= len(self.current_context)
         # Update the context
         # Remove the beginning of the context
-        self.current_context = self.current_context[len(context):] + context
+        self.current_context.extend(context)
 
 # TODO: These tests only test with tree depth 3
 # We should probably add tests for other depths
