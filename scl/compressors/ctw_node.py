@@ -43,17 +43,17 @@ class CTWNode(BinaryNode):
             self.b += 1
 
     def average_log2(self, a: float, b: float) -> float:
-        # return np.log2(0.5 * (2**a + 2**b)) using some funky math
+        # return log2(0.5 * (2**a + 2**b)) using some funky math
         # TODO: magnitude of a is becoming so large (eg -1000) that 2**(a-b) becomes -inf 
         if b < a:
-            temp =  a-1 + log2(2**(b-a) + 1)
+            temp = a-1 + log2(2**(b-a) + 1)
             if 2**(b-a) < 0.001:
                 pass
                 # temp = a-1 + 2**(b-a)
                 # print("avg log2:", a, b, 2**(a-b), 2**(b-a), temp)
                 # print(self.kt_prob_log2, self.left_child.node_prob_log2 + self.right_child.node_prob_log2)
         else:
-            temp =  b-1 + log2(2**(a-b) + 1)
+            temp = b-1 + log2(2**(a-b) + 1)
             if 2**(a-b) < 0.001:
                 pass
                 # temp = b-1 + 2**(a-b)
@@ -106,7 +106,9 @@ class CTWNode(BinaryNode):
         original_id = self.id
         if not self.id:
             self.id = "ROOT"
-        self.id = str(self.id) + ", a=" + str(self.a) + ", b=" + str(self.b) + ", node_prob=" + str(2**self.node_prob_log2)
+        else:
+            self.id = self.id.to01()
+        self.id = self.id + ", a=" + str(self.a) + ", b=" + str(self.b) + ", node_prob_log2=" + str(self.node_prob_log2)[:5] + " (" + str(2**self.node_prob_log2)[:5] + ")"
         lines, root_node = super()._get_lines()
         self.id = original_id
         return lines, root_node
