@@ -127,6 +127,7 @@ def test_lz77_multiblock_file_encode_decode():
     DATA_SIZE = 2**16
 
     markov_seq = gen_kth_order_markov_seq(3, DATA_SIZE)
+    data_block_lz77 = DataBlock(markov_seq)
 
     #initial_window = [44, 45, 46] * 5
     # define encoder, decoder
