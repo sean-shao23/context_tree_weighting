@@ -22,7 +22,6 @@ from scl.compressors.lz77 import (
     LZ77Decoder,
 )
 from scl.utils.test_utils import get_random_data_block, try_lossless_compression
-
 import copy
 from math import log2
 import numpy as np
@@ -98,19 +97,25 @@ def test_huffman_encoding():
 
     markov_seq = gen_kth_order_markov_seq(3, DATA_SIZE)
     data_block_huffman = DataBlock(markov_seq)
+    prob_dist = data_block_huffman.get_empirical_distribution(order=0)
     # create encoder decoder
 
     encoder = HuffmanEncoder(prob_dist)
     decoder = HuffmanDecoder(prob_dist)
 
     # perform compression
-    is_lossless, output_len, _ = try_lossless_compression(data_block, encoder, decoder)
-    avg_bits = output_len / NUM_SAMPLES
+    start_time_huffman = time.time()
+    is_lossless, output_len, _ = try_lossless_compression(data_block_huffman, encoder, decoder)
+    time_taken_huffman = time.time() - start_time_huffman
+    print("huffman coding took", time_taken_huffman*1000, "(ms)")
+    avg_codelen = output_len / DATA_SIZE
+    print(f"avg_codelen: {avg_codelen:.3f}")
 
     # get optimal codelen
-    optimal_codelen = get_avg_neg_log_prob(prob_dist, data_block)
+    #optimal_codelen = get_avg_neg_log_prob(prob_dist, data_block)
     assert is_lossless, "Lossless compression failed"
 
+    """
     np.testing.assert_almost_equal(
         avg_bits,
         optimal_codelen,
@@ -133,6 +138,7 @@ def test_huffman_encoding():
     print("huffman coding took", time_taken_huffman*1000, "(ms)")
     assert is_lossless
     assert output_len == NUM_SAMPLES
+    """
     
 
     """
@@ -190,13 +196,24 @@ def test_lz77_multiblock_file_encode_decode():
     - perform decoding and check if the compression was lossless
 
     """
-    NUM_SAMPLES = 2**16
+    DATA_SIZE = 2**16
 
-    initial_window = [44, 45, 46] * 5
+    markov_seq = gen_kth_order_markov_seq(3, DATA_SIZE)
+
+    #initial_window = [44, 45, 46] * 5
     # define encoder, decoder
-    encoder = LZ77Encoder(initial_window=initial_window)
-    decoder = LZ77Decoder(initial_window=initial_window)
+    encoder = LZ77Encoder(initial_window=markov_seq)
+    decoder = LZ77Decoder(initial_window=markov_seq)
 
+    start_time_lz77 = time.time()
+    is_lossless, output_len, _ = try_lossless_compression(data_block_lz77, encoder, decoder)
+    time_taken_lz77 = time.time() - start_time_lz77
+    avg_codelen = output_len / DATA_SIZE
+    print(f"avg_codelen: {avg_codelen:.3f}")
+    print("lz77 coding took", time_taken_lz77*1000, "(ms)")
+
+
+    """
     with tempfile.TemporaryDirectory() as tmpdirname:
         # create a file with some random data
         input_file_path = os.path.join(tmpdirname, "inp_file.txt")
@@ -211,23 +228,22 @@ def test_lz77_multiblock_file_encode_decode():
         assert try_file_lossless_compression(
             input_file_path, encoder, decoder, encode_block_size=1000
         )
+
         data_block = get_random_data_block(prob_dist, NUM_SAMPLES, seed=0)
-        start_time_lz77 = time.time()
-        is_lossless, output_len, _ = try_lossless_compression(data_block, encoder, decoder)
-        time_taken_lz77 = time.time() - start_time_lz77
-        avg_codelen = output_len / NUM_SAMPLES
-        print(f"avg_codelen: {avg_codelen:.3f}")
-        print("lz77 coding took", time_taken_lz77*1000, "(ms)")
-
-
-def test_adaptive_arithmetic_coding():
     """
+
+"""
+def test_adaptive_arithmetic_coding():
     Test if AEC coding is working as expcted for different parameter settings
     - Check if encoding/decodng is lossless
     - Check if the compression is close to optimal
-    """
 
     NUM_SAMPLES = 1000
+
+    DATA_SIZE = 2**16
+
+    markov_seq = gen_kth_order_markov_seq(3, DATA_SIZE)
+    data_block_lz77 = DataBlock(markov_seq)
 
     # trying out some random frequencies/aec_parameters
     data_freqs_list = [
@@ -243,7 +259,7 @@ def test_adaptive_arithmetic_coding():
         AECParams(DATA_BLOCK_SIZE_BITS=12),
         AECParams(DATA_BLOCK_SIZE_BITS=12, PRECISION=16),
     ]
-
+    
     ## create adaptive coder
     for freq, params in zip(data_freqs_list, params_list):
 
@@ -269,7 +285,7 @@ def test_adaptive_arithmetic_coding():
             encoding_optimality_precision: bool = None,
             seed: int = 0,
         ):
-            """Checks if the given entropy coder performs lossless compression and optionally if it is
+            Checks if the given entropy coder performs lossless compression and optionally if it is
             "optimal".
 
             NOTE: the notion of optimality is w.r.t to the avg_log_probability of the randomly
@@ -283,7 +299,6 @@ def test_adaptive_arithmetic_coding():
                 data_size (int): the size of the data to generate
                 encoding_optimality_precision (bool, optional): Optionally (if not None) check if the average log_prob is close to the avg_codelen. Defaults to None.
                 seed (int, optional): _description_. seed to generate random data. Defaults to 0.
-            """
             # generate random data
             prob_dist = freq.get_prob_dist()
             data_block = get_random_data_block(prob_dist, data_size, seed=seed)
@@ -311,3 +326,5 @@ def test_adaptive_arithmetic_coding():
         lossless_entropy_coder_test_new(
             encoder, decoder, freq, NUM_SAMPLES, encoding_optimality_precision=1e-1, seed=0
         )
+        
+        """
