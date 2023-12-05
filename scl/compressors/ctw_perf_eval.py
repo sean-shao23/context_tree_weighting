@@ -1,3 +1,5 @@
+from scl.core.data_block import DataBlock
+from scl.compressors.lz77 import LZ77Encoder
 from scl.compressors.arithmetic_coding import AECParams, ArithmeticEncoder
 from scl.compressors.ctw_eval import gen_kth_order_markov_seq
 from scl.compressors.ctw_model import CTWModel, CTWModelUnicode
@@ -94,7 +96,7 @@ def test_time_vs_tree_size():
 
 def test_memory_vs_tree_size():
     BLACKLIST = type, ModuleType, FunctionType
-
+    
     def getsize(obj):
         """sum size of object & members."""
         if isinstance(obj, BLACKLIST):
@@ -113,10 +115,13 @@ def test_memory_vs_tree_size():
         return size
 
     sizes = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
-    tree_sizes = [getsize(CTWTree(size, BitArray("0"*size)))/1000 for size in sizes]
+
+    # tree_sizes = [getsize(CTWTree(size, BitArray("0"*size)))/1000 for size in sizes]
+    tree_sizes = [1.024, 1.52, 2.452, 4.316, 8.044, 15.5, 30.412, 60.236, 119.884, 240.716, 480.332]
+    print(tree_sizes)
 
     plt.figure()
-    plt.plot(sizes, tree_sizes)
+    plt.plot(sizes, tree_sizes, 'o-')
     plt.xlabel('Tree Size (Height)')
     plt.ylabel('Size in Memory (kB)')
     plt.title("Memory Usage vs Tree Size")
@@ -233,7 +238,6 @@ def test_rate_vs_input_length_english():
     aec_params = AECParams()
     k_chars=2
 
-
     """
     expected_rates = []
     expected_rates_unicode = []
@@ -262,6 +266,18 @@ def test_rate_vs_input_length_english():
         expected_markov_rates.append(markov_bits/input_size)
     """
 
+    expected_lz77_rates = []
+    for input_size in sizes_to_test:
+        input_seq = sample_text[:input_size]
+        input_seq_binary = []
+        for char in input_seq:
+            input_seq_binary += uint_to_bitarray(ord(char), bit_width=NUM_TREES).tolist()
+        
+        lz77_enc = LZ77Encoder(initial_window=None)
+
+        lz77_bits = lz77_enc.encode_block(DataBlock(input_seq))
+
+        expected_lz77_rates.append(len(lz77_bits)/input_size)
 
     expected_rates_precomputed = [7.767702521503873, 7.591960185250805, 7.333576247710156, 7.121935185837094, 6.918347069483133, 6.741904222534488, 6.511946794167895]
     expected_rates_unicode_precomputed = [6.451259916162104, 6.268055797216225, 6.125702512671365, 6.065929549807966, 6.0090381323044415, 5.954248159267637, 5.895249096437932]
@@ -270,16 +286,18 @@ def test_rate_vs_input_length_english():
     print(expected_rates_unicode_precomputed)
     print(expected_markov_rates_precomputed)
 
+    print(expected_lz77_rates)
 
     plt.figure()
     plt.plot(sizes_to_test, expected_rates_precomputed, 'o-')  # 'o-' means that the points will be marked and connected by a line
     plt.plot(sizes_to_test, expected_rates_unicode_precomputed, 'o-')
     plt.plot(sizes_to_test, expected_markov_rates_precomputed, 'o-')
+    plt.plot(sizes_to_test, expected_lz77_rates, 'o-')
 
 
     plt.xlabel('Input Length (characters)')
     plt.ylabel('Optimal Rate (bits/symbol)')
-    plt.legend(["CTW", "CTW with 8 trees", str(k_chars) + "nd Order Markov"])
+    plt.legend(["CTW", "CTW with 8 trees", str(k_chars) + "nd Order Markov", "LZ77"])
     # plt.ylim(5.5, 8.5)
     plt.xlim(0, 160)
 

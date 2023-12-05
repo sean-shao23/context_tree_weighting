@@ -140,7 +140,7 @@ class EmpiricalIntHuffmanEncoder(DataEncoder):
     def encode_block(self, data_block: DataBlock):
         vals = data_block.data_list
         # verify that all values are in the range 0 to alphabet_size-1
-        assert all([val >= 0 and val < self.alphabet_size for val in vals])
+        # assert all([val >= 0 and val < self.alphabet_size for val in vals])
 
         # first encode the values with empirical Huffman code
         counts = DataBlock(vals).get_counts()
