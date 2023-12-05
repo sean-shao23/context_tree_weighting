@@ -115,78 +115,6 @@ def test_huffman_encoding():
     #optimal_codelen = get_avg_neg_log_prob(prob_dist, data_block)
     assert is_lossless, "Lossless compression failed"
 
-    """
-    np.testing.assert_almost_equal(
-        avg_bits,
-        optimal_codelen,
-        err_msg="Huffman coding is not equal to optimal codelens",
-    )
-    print(
-        f"Avg Bits: {avg_bits}, optimal codelen: {optimal_codelen}, Entropy: {prob_dist.entropy}"
-    )
-
-    # for the special case of single symbol alphabet, verify that it's lossless
-    # (note that entropy is not achieved in this case)
-    prob_dist = ProbabilityDist({"A": 1.0})
-    data_block = DataBlock(["A"] * NUM_SAMPLES)
-    # create encoder decoder
-    encoder = HuffmanEncoder(prob_dist)
-    decoder = HuffmanDecoder(prob_dist)
-    start_time_huffman = time.time()
-    is_lossless, output_len, _ = try_lossless_compression(data_block, encoder, decoder)
-    time_taken_huffman = time.time() - start_time_huffman
-    print("huffman coding took", time_taken_huffman*1000, "(ms)")
-    assert is_lossless
-    assert output_len == NUM_SAMPLES
-    """
-    
-
-    """
-    distributions = [
-        ProbabilityDist({"A": 0.5, "B": 0.5}),
-        ProbabilityDist({"A": 0.5, "B": 0.25, "C": 0.25}),
-        ProbabilityDist({"A": 0.5, "B": 0.25, "C": 0.125, "D": 0.125}),
-    ]
-    print()
-    for prob_dist in distributions:
-        # generate random data
-        data_block = get_random_data_block(prob_dist, NUM_SAMPLES, seed=0)
-
-        # create encoder decoder
-        encoder = HuffmanEncoder(prob_dist)
-        decoder = HuffmanDecoder(prob_dist)
-
-        # perform compression
-        is_lossless, output_len, _ = try_lossless_compression(data_block, encoder, decoder)
-        avg_bits = output_len / NUM_SAMPLES
-
-        # get optimal codelen
-        optimal_codelen = get_avg_neg_log_prob(prob_dist, data_block)
-        assert is_lossless, "Lossless compression failed"
-
-        np.testing.assert_almost_equal(
-            avg_bits,
-            optimal_codelen,
-            err_msg="Huffman coding is not equal to optimal codelens",
-        )
-        print(
-            f"Avg Bits: {avg_bits}, optimal codelen: {optimal_codelen}, Entropy: {prob_dist.entropy}"
-        )
-
-        # for the special case of single symbol alphabet, verify that it's lossless
-        # (note that entropy is not achieved in this case)
-        prob_dist = ProbabilityDist({"A": 1.0})
-        data_block = DataBlock(["A"] * NUM_SAMPLES)
-        # create encoder decoder
-        encoder = HuffmanEncoder(prob_dist)
-        decoder = HuffmanDecoder(prob_dist)
-        start_time_huffman = time.time()
-        is_lossless, output_len, _ = try_lossless_compression(data_block, encoder, decoder)
-        time_taken_huffman = time.time() - start_time_huffman
-        print("huffman coding took", time_taken_huffman*1000, "(ms)")
-        assert is_lossless
-        assert output_len == NUM_SAMPLES
-    """
 
 def test_lz77_multiblock_file_encode_decode():
     """full test for LZ77Encoder and LZ77Decoder
@@ -213,25 +141,7 @@ def test_lz77_multiblock_file_encode_decode():
     print("lz77 coding took", time_taken_lz77*1000, "(ms)")
 
 
-    """
-    with tempfile.TemporaryDirectory() as tmpdirname:
-        # create a file with some random data
-        input_file_path = os.path.join(tmpdirname, "inp_file.txt")
-        prob_dist = ProbabilityDist({44: 0.5, 45: 0.25, 46: 0.2, 255: 0.05})
-        create_random_binary_file(
-            input_file_path,
-            file_size=500,
-            prob_dist=ProbabilityDist({44: 0.5, 45: 0.25, 46: 0.2, 255: 0.05}),
-        )
-
-        # test lossless compression
-        assert try_file_lossless_compression(
-            input_file_path, encoder, decoder, encode_block_size=1000
-        )
-
-        data_block = get_random_data_block(prob_dist, NUM_SAMPLES, seed=0)
-    """
-
+   
 """
 def test_adaptive_arithmetic_coding():
     Test if AEC coding is working as expcted for different parameter settings
