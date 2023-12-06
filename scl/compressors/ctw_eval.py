@@ -222,7 +222,7 @@ def test_and_plot():
         decoder = LZ77Decoder(initial_window=None)
         start_time_huffman = time.time()
         # TODO: uncomment and fix resulting error
-        # is_lossless, output_len, _ = try_lossless_compression(seq_as_datablock, encoder, decoder)
+        is_lossless, output_len, _ = try_lossless_compression(seq_as_datablock, encoder, decoder)
         time_taken_huffman = time.time() - start_time_huffman
         assert is_lossless
         lz_t.append(time_taken_huffman*1000)
@@ -237,7 +237,7 @@ def test_and_plot():
 
     plt.xlabel('Input Length (symbols)')
     plt.ylabel('Time (ms))')
-    plt.legend(["CTW", "3rd Order Markov", "Huffman", "LZ77"])
+    plt.legend(["CTW - Depth 3", "3rd Order Markov", "Huffman", "LZ77"])
 
     plt.title("Compression Time (Encode + Decode) vs Input Length")
     plt.savefig('time_vs_length_all.png')
@@ -246,14 +246,14 @@ def test_and_plot():
     plt.plot(sizes, ctw_r, 'o-')  # 'o-' means that the points will be marked and connected by a line
     plt.plot(sizes, adapt_r, 'o-')
     plt.plot(sizes, huff_r, 'o-')
-    plt.plot(sizes, lz_r, 'o-')
+    #plt.plot(sizes, lz_r, 'o-')
 
 
     plt.xlabel('Input Length (symbols)')
     plt.ylabel('Rate (bits/symbol))')
-    plt.legend(["CTW", "3rd Order Markov", "Huffman", "LZ77"])
+    plt.legend(["CTW - Depth 3", "3rd Order Markov", "Huffman", "LZ77"])
     prob_flip = 0.1
-    plt.ylim([0, 1.1])
+    plt.gca().set_ylim(bottom=0)
     plt.axhline(prob_flip*log2(1/prob_flip) + (1-prob_flip)*log2(1/(1-prob_flip)), color='green', linestyle='--')
 
     plt.title("Compression Rate vs Input Length")

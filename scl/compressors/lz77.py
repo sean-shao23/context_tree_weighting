@@ -536,7 +536,7 @@ class LZ77Encoder(DataEncoder):
         pos_in_window = len(self.window)
 
         # put the entire data block in the window at once, we will find matches later
-        self.window += data_block.data_list
+        self.window += list(data_block.data_list)
 
         # now go over the window starting at pos_in_window and try to find matches
         # in the past

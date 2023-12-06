@@ -19,40 +19,33 @@ from typing import Any
 def compute_optimal_rate(enc: Any, sequence: list):
     bits = 0
     for symbol in sequence:
-        enc.update_model(symbol)
-        freq_dist = enc.freqs_current.freq_list
+        freq = enc.freqs_current.frequency(symbol)
         total_freq = enc.freqs_current.total_freq
-
-        entropy = 0
-        for freq in freq_dist:
-            prob = freq/total_freq
-            entropy += prob * log2(1/prob)
-
-        bits += entropy
+        bits += log2(total_freq/freq)
+        enc.update_model(symbol)
     return bits
 
 def test_time_vs_input_size():
     sizes_to_test = [1, 2, 3, 4, 5, 10, 20]
 
-    """
-    times_taken = []
-    for input_size in sizes_to_test:
-        input_seq = np.zeros(input_size*100000, dtype=int)
-        ctw_enc = CTWModel(3, BitArray("110"))
+    times_taken = [3905.0087928771973, 6431.334733963013, 9527.854681015015, 12986.912488937378, 17629.652738571167, 35804.90827560425, 71199.5599269867]
+    # times_taken = []
+    if not times_taken:
+        for input_size in sizes_to_test:
+            input_seq = np.zeros(input_size*100000, dtype=int)
+            ctw_enc = CTWModel(3, BitArray("110"))
 
-        start_time = time.time()
+            start_time = time.time()
 
-        for symbol in input_seq:
-            ctw_enc.update_model(symbol)
+            for symbol in input_seq:
+                ctw_enc.update_model(symbol)
 
-        times_taken.append((time.time() - start_time)*1000)
-    """
+            times_taken.append((time.time() - start_time)*1000)
 
-    times_taken_precomputed = [2908.867597579956, 5795.073986053467, 8563.17138671875, 11593.276977539062, 14253.265142440796, 28525.282859802246, 57110.273122787476]
-    print(times_taken_precomputed)
+    print(times_taken)
     
     plt.figure()
-    plt.plot(sizes_to_test, [t/1000 for t in times_taken_precomputed], 'o-')  # 'o-' means that the points will be marked and connected by a line
+    plt.plot(sizes_to_test, [t/1000 for t in times_taken], 'o-')  # 'o-' means that the points will be marked and connected by a line
 
     plt.xlabel('Input Length (symbols) x 100,000')
     plt.ylabel('Encode Time (s)')
@@ -66,25 +59,24 @@ def test_time_vs_tree_size():
     datasize = 100000
     sizes_to_test = [1, 2, 3, 4, 5, 10, 20]
 
-    """
-    times_taken = []
-    for input_size in sizes_to_test:
-        input_seq = np.zeros(datasize, dtype=int)
-        ctw_enc = CTWModel(input_size, BitArray("0"*input_size))
+    times_taken = [2461.505889892578, 3035.9439849853516, 3503.7267208099365, 3989.502429962158, 4312.785387039185, 6371.909141540527, 12429.552555084229]
+    # times_taken = []
+    if not times_taken:
+        for input_size in sizes_to_test:
+            input_seq = np.zeros(datasize, dtype=int)
+            ctw_enc = CTWModel(input_size, BitArray("0"*input_size))
 
-        start_time = time.time()
+            start_time = time.time()
 
-        for symbol in input_seq:
-            ctw_enc.update_model(symbol)
+            for symbol in input_seq:
+                ctw_enc.update_model(symbol)
 
-        times_taken.append((time.time() - start_time)*1000)
-    """
+            times_taken.append((time.time() - start_time)*1000)
 
-    times_taken_precomputed = [2012.902021408081, 2474.2307662963867, 2937.960147857666, 3301.0332584381104, 3753.5312175750732, 5839.991807937622, 10435.01329421997]
-    print(times_taken_precomputed)
+    print(times_taken)
     
     plt.figure()
-    plt.plot(sizes_to_test, [t/1000 for t in times_taken_precomputed], 'o-')  # 'o-' means that the points will be marked and connected by a line
+    plt.plot(sizes_to_test, [t/1000 for t in times_taken], 'o-')  # 'o-' means that the points will be marked and connected by a line
 
     plt.xlabel('Tree Size (Height)')
     plt.ylabel('Encode Time (s)')
@@ -133,40 +125,35 @@ def test_rate_vs_input_length_markov():
     sizes_to_test = [10, 20, 50, 100, 300, 500, 1000, 2000, 5000, 10000, 20000, 50000, 100000]
     aec_params = AECParams()
     prob_flip = 0.1
-    k=5
+    k=2
 
-    """
     expected_rates = []
     expected_markov_rates = []
     for input_size in sizes_to_test:
         input_seq = gen_kth_order_markov_seq(k, input_size, prob_flip, seed=1)
-        context_str = ''.join([str(s) for s in input_seq[:k]]) 
+        context_str = ''.join([str(s) for s in input_seq[:5]]) 
 
-        ctw_enc = CTWModel(k, BitArray(context_str))
-        markov_enc = AdaptiveOrderKFreqModel([0, 1], k, aec_params.MAX_ALLOWED_TOTAL_FREQ)
+        ctw_enc = CTWModel(5, BitArray(context_str))
+        markov_enc = AdaptiveOrderKFreqModel([0, 1], 5, aec_params.MAX_ALLOWED_TOTAL_FREQ)
 
         ctw_bits = compute_optimal_rate(ctw_enc, input_seq[k:]) + k
         markov_bits = compute_optimal_rate(markov_enc, input_seq)
         expected_rates.append(ctw_bits/input_size)
         expected_markov_rates.append(markov_bits/input_size)
-    """
 
-    expected_rates_precomputed = [0.9764031350542443, 0.9660057524677498, 0.8832024532985352, 0.920452269316836, 0.7726705314975587, 0.7054213821198038, 0.6269632874770548, 0.568649166831337, 0.5179458987400668, 0.4976660642383781, 0.485771863954453, 0.4765432680362103, 0.47327161233011217]
-    expected_markov_rates_precomputed = [1.0, 0.9525313543649847, 0.918772449626383, 0.9099632824307652, 0.7962795901223189, 0.7433608348425556, 0.6717780794227087, 0.6049086038043991, 0.5410284098012595, 0.5125271659470453, 0.49491314213474624, 0.4811054209226618, 0.4758971526515169]
-
-    print(expected_rates_precomputed)
-    print(expected_markov_rates_precomputed)
+    print(expected_rates)
+    print(expected_markov_rates)
 
     plt.figure()
-    plt.plot(sizes_to_test, expected_rates_precomputed, 'o-')  # 'o-' means that the points will be marked and connected by a line
-    plt.plot(sizes_to_test, expected_markov_rates_precomputed, 'o-')  # 'o-' means that the points will be marked and connected by a line
+    plt.plot(sizes_to_test, expected_rates, 'o-')  # 'o-' means that the points will be marked and connected by a line
+    plt.plot(sizes_to_test, expected_markov_rates, 'o-')  # 'o-' means that the points will be marked and connected by a line
 
     plt.xlabel('Input Length (symbols)')
     plt.ylabel('Optimal Rate (bits/symbol)')
-    plt.ylim([0, 1])
+    plt.gca().set_ylim(bottom=0)
     plt.xscale('log')
-    plt.title("Optimal Rate vs Input Length for 5th Order Markov Source with Bern(0.1)")
-    plt.legend(["CTW", "5th Order Markov Model"])
+    plt.title("Optimal Rate vs Input Length for 2nd Order Markov Source with Bern(0.1)")
+    plt.legend(["CTW - Depth 5", "5th Order Markov Model"])
 
     # TODO: Make this a dashed line?
     plt.axhline(prob_flip*log2(1/prob_flip) + (1-prob_flip)*log2(1/(1-prob_flip)), color='green', linestyle='--')
@@ -191,7 +178,7 @@ def test_rate_vs_input_length_tree_source():
     sizes_to_test = [10, 20, 50, 100, 300, 500, 1000, 2000, 5000, 10000]
     aec_params = AECParams()
     prob_flip = 0.1
-    k=2
+    k=5
 
     expected_rates = []
     expected_markov_rates = []
@@ -207,22 +194,19 @@ def test_rate_vs_input_length_tree_source():
         expected_rates.append(ctw_bits/input_size)
         expected_markov_rates.append(markov_bits/input_size)
         
-    expected_rates_precomputed = expected_rates
-    expected_markov_rates_precomputed = expected_markov_rates
-
-    print(expected_rates_precomputed)
-    print(expected_markov_rates_precomputed)
+    print(expected_rates)
+    print(expected_markov_rates)
 
     plt.figure()
-    plt.plot(sizes_to_test, expected_rates_precomputed, 'o-')  # 'o-' means that the points will be marked and connected by a line
-    plt.plot(sizes_to_test, expected_markov_rates_precomputed, 'o-')  # 'o-' means that the points will be marked and connected by a line
+    plt.plot(sizes_to_test, expected_rates, 'o-')  # 'o-' means that the points will be marked and connected by a line
+    plt.plot(sizes_to_test, expected_markov_rates, 'o-')  # 'o-' means that the points will be marked and connected by a line
 
     plt.xlabel('Input Length (symbols)')
     plt.ylabel('Optimal Rate (bits/symbol)')
     plt.ylim([0, 1])
     plt.xscale('log')
     plt.title("Optimal Rate vs Input Length for 2nd Order Tree Source with Bern(0.1)")
-    plt.legend(["CTW", "2nd Order Markov"])
+    plt.legend(["CTW - Depth 5", "5th Order Markov"])
 
     # TODO: Make this a dashed line?
     plt.axhline(prob_flip*log2(1/prob_flip) + (1-prob_flip)*log2(1/(1-prob_flip)), color='green', linestyle='--')
@@ -238,7 +222,6 @@ def test_rate_vs_input_length_english():
     aec_params = AECParams()
     k_chars=2
 
-    """
     expected_rates = []
     expected_rates_unicode = []
     expected_markov_rates = []
@@ -264,7 +247,6 @@ def test_rate_vs_input_length_english():
         expected_rates.append(ctw_bits/input_size)
         expected_rates_unicode.append(ctw_unicode_bits/input_size)
         expected_markov_rates.append(markov_bits/input_size)
-    """
 
     expected_lz77_rates = []
     for input_size in sizes_to_test:
@@ -279,27 +261,26 @@ def test_rate_vs_input_length_english():
 
         expected_lz77_rates.append(len(lz77_bits)/input_size)
 
-    expected_rates_precomputed = [7.767702521503873, 7.591960185250805, 7.333576247710156, 7.121935185837094, 6.918347069483133, 6.741904222534488, 6.511946794167895]
-    expected_rates_unicode_precomputed = [6.451259916162104, 6.268055797216225, 6.125702512671365, 6.065929549807966, 6.0090381323044415, 5.954248159267637, 5.895249096437932]
-    expected_markov_rates_precomputed = [8.0, 7.999784244802657, 7.999640408004429, 7.999361937720744, 7.999068198644859, 7.998812208526192, 7.998421190295794]
-    print(expected_rates_precomputed)
-    print(expected_rates_unicode_precomputed)
-    print(expected_markov_rates_precomputed)
+    print(expected_rates)
+    print(expected_rates_unicode)
+    print(expected_markov_rates)
 
     print(expected_lz77_rates)
 
     plt.figure()
-    plt.plot(sizes_to_test, expected_rates_precomputed, 'o-')  # 'o-' means that the points will be marked and connected by a line
-    plt.plot(sizes_to_test, expected_rates_unicode_precomputed, 'o-')
-    plt.plot(sizes_to_test, expected_markov_rates_precomputed, 'o-')
-    plt.plot(sizes_to_test, expected_lz77_rates, 'o-')
+    plt.plot(sizes_to_test, expected_rates, 'o-')  # 'o-' means that the points will be marked and connected by a line
+    plt.plot(sizes_to_test, expected_rates_unicode, 'o-')
+    plt.plot(sizes_to_test, expected_markov_rates, 'o-')
+    # plt.plot(sizes_to_test, expected_lz77_rates, 'o-')
 
 
     plt.xlabel('Input Length (characters)')
     plt.ylabel('Optimal Rate (bits/symbol)')
-    plt.legend(["CTW", "CTW with 8 trees", str(k_chars) + "nd Order Markov", "LZ77"])
+    plt.legend(["CTW - Depth 16", "CTW with 8 trees - Depth 16", "16th Order Markov", "LZ77"])
     # plt.ylim(5.5, 8.5)
     plt.xlim(0, 160)
 
     plt.title("Optimal Rate vs Input Length for English Source")
     plt.savefig('rate_vs_input_length_english.png')
+
+test_rate_vs_input_length_english()
