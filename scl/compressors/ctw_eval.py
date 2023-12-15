@@ -15,6 +15,8 @@ from scl.utils.test_utils import (
     lossless_entropy_coder_test,
     create_random_binary_file,
     try_file_lossless_compression,
+    create_random_binary_file,
+    try_file_lossless_compression,
     lossless_test_against_expected_bitrate,
 )
 from scl.core.data_encoder_decoder import DataDecoder, DataEncoder
@@ -22,6 +24,7 @@ from scl.compressors.lz77 import (
     LZ77Encoder,
     LZ77Decoder,
 )
+from scl.utils.test_utils import get_random_data_block, try_lossless_compression
 from scl.utils.test_utils import get_random_data_block, try_lossless_compression
 import copy
 from math import log2
