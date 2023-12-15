@@ -1,3 +1,4 @@
+from scl.compressors.probability_models import FreqModelBase
 from scl.compressors.arithmetic_coding import AECParams, ArithmeticDecoder, ArithmeticEncoder
 from scl.compressors.ctw_tree import CTWTree
 from scl.core.prob_dist import Frequencies
@@ -27,7 +28,7 @@ def convert_float_prob_to_int(p: float, M: int=2**16) -> int:
 
     return int(p * M)
 
-class CTWModel:
+class CTWModel(FreqModelBase):
     """
     Represents the CTW model
 
@@ -39,11 +40,16 @@ class CTWModel:
 
     def __init__(self, tree_height: int, context: BitArray):
         """
-        Initialize the frequency dict to uniform distribution
-        and CTW tree with the given heigh and context
+        Initialize the CTW tree with the given height and context
+        Initialize the frequency distribution
         """
-        self.freqs_current = Frequencies({0: 1, 1: 1})
         self.ctw_tree = CTWTree(tree_height=tree_height, past_context=context)
+
+        prob_of_zero = self.ctw_tree.get_symbol_prob(0)
+        default_dist = {0: convert_float_prob_to_int(prob_of_zero),
+                        1: convert_float_prob_to_int(1-prob_of_zero)}
+        assert default_dist[0] == default_dist[1]
+        self.freqs_current = Frequencies(default_dist)
 
     # TODO: update_model only handles 0 or 1 (properly)
     # If intended, add checks (asserts)
@@ -72,7 +78,7 @@ class CTWModel:
         self.freqs_current._validate_freq_dist(self.freqs_current.freq_dict) # check if freqs are valid
 
 NUM_TREES = 8
-class CTWModelUnicode:
+class CTWModelUnicode(FreqModelBase):
     """
     Represents the CTW model for coding unicode
 
@@ -117,8 +123,6 @@ class CTWModelUnicode:
 
         # Update the frequency distribution
         self.freqs_current = Frequencies(new_dist)
-        print("added symbol", symbol, "now freq dist is", sorted((str(k) + ": " + str(v) for k,v in new_dist.items()), key=lambda x: int(x[3:]), reverse=True)[0:10])
-        print("probability of a is", new_dist["a"]/self.freqs_current.total_freq)
 
         aec_params = AECParams() # params used for arithmetic coding in SCL
         assert self.freqs_current.total_freq <= aec_params.MAX_ALLOWED_TOTAL_FREQ, (
@@ -130,7 +134,7 @@ class CTWModelUnicode:
 
 DATA_SIZE = 2**10
 
-def compress_sequence(sequence: list):
+def compress_sequence(sequence: list, tree_depth: int=3, context: BitArray=BitArray("110")):
     """
     Create an arithmetic encoder/decoder pair using the CTW model
 
@@ -145,7 +149,7 @@ def compress_sequence(sequence: list):
     # NOTE: important to make a copy, as the encoder updates the model, and we don't want to pass
     # the update model around
     # TODO: What should the context be, if anything?
-    freq_model_enc = CTWModel(3, BitArray("110"))
+    freq_model_enc = CTWModel(tree_depth, context)
     freq_model_dec = copy.deepcopy(freq_model_enc)
 
     # create encoder/decoder
@@ -201,7 +205,6 @@ def compress_english(input_string: list):
 # TODO: Add way to "undo" the revert of the tree (so we don't recompute tree we just computed)?
 # Or make a non-overwriting update function for the nodes?
 def test_ctw_model():
-    return
     def gen_input_seq(next_val_func: Callable, context: list=[1, 1, 0]) -> list:
         """
         Create a sequence using next_val_func() for the next value of the sequence,
@@ -250,15 +253,40 @@ def test_ctw_model():
 
     print("Average time (ms) per bit:", 1000*sum(time_taken)/len(time_taken)/DATA_SIZE)
 
-def test_ctw_english():
-    input_string = "aaaaaaaaa"
+def test_ctw_english_as_binary():
+    input_string = "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum."
+    
+    # Convert the text into a binary sequence by converting each character into its unicode value
+    input_string_binary = []
+    for char in input_string:
+        input_string_binary += uint_to_bitarray(ord(char), bit_width=8).tolist()
+    
     start_time = time.time()
 
+    # Compresses the binary sequence and confirms it was losslessly sent
+    bits_per_bit = compress_sequence(input_string_binary)
+
+    total_time = time.time() - start_time
+    print("Average time (ms) per character:", 1000*total_time/len(input_string))
+
+    # If input string is too short, the overhead of the arithmetic encoder may be high enough that bits_per_char is >= 8
+    bits_per_char = bits_per_bit*8
+    assert bits_per_char < 8
+    print("Average bits per character:", bits_per_char)
+
+
+
+def test_ctw_english():
+    input_string = "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum."
+
+    start_time = time.time()
+
+    # Compresses the text and confirms it was losslessly sent
     bits_per_char = compress_english(input_string)
 
     total_time = time.time() - start_time
-    print("Average time (ms) to send", len(input_string), "characters:", 1000*total_time)
+    print("Average time (ms) per character:", 1000*total_time/len(input_string))
 
-    # TODO: placeholder assert (add better test)
-    assert bits_per_char > 0
-    print(bits_per_char)
+    # If input string is too short, the overhead of the arithmetic encoder may be high enough that bits_per_char is >= 8
+    assert bits_per_char < 8
+    print("Average bits per character:", bits_per_char)

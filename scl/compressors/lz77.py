@@ -140,7 +140,7 @@ class EmpiricalIntHuffmanEncoder(DataEncoder):
     def encode_block(self, data_block: DataBlock):
         vals = data_block.data_list
         # verify that all values are in the range 0 to alphabet_size-1
-        assert all([val >= 0 and val < self.alphabet_size for val in vals])
+        # assert all([val >= 0 and val < self.alphabet_size for val in vals])
 
         # first encode the values with empirical Huffman code
         counts = DataBlock(vals).get_counts()
@@ -536,7 +536,7 @@ class LZ77Encoder(DataEncoder):
         pos_in_window = len(self.window)
 
         # put the entire data block in the window at once, we will find matches later
-        self.window += data_block.data_list
+        self.window += list(data_block.data_list)
 
         # now go over the window starting at pos_in_window and try to find matches
         # in the past

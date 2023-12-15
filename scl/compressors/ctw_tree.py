@@ -1,6 +1,7 @@
 from scl.compressors.ctw_node import CTWNode
 from scl.utils.bitarray_utils import BitArray, uint_to_bitarray
-import copy
+
+from collections import deque
 import numpy as np
 
 # TODO: Original paper describes storage complexity as linear in D...but the size of the tree is ~ 2^D
@@ -13,6 +14,7 @@ class CTWTree():
     Store the root node, context, and snapshot
     """
     root: CTWNode = None                        # root node of CTW tree
+    tree_height: int = None
     current_context: BitArray = None            # context (past symbols seen) for current state of CTW tree
     snapshot: list = None                       # list of nodes that were updated so that we can revert the update
     get_snapshot: bool = None                   # flag telling us whether to save what nodes we've updated
@@ -24,10 +26,20 @@ class CTWTree():
 
         assert len(past_context) == tree_height
 
-        self.current_context = past_context
+        self.tree_height = tree_height
+        self.current_context = deque(past_context, maxlen=tree_height)
 
-        # Call recursive function self.gen_tree() to populate the nodes of the tree
-        self.root = self.gen_tree(depth=tree_height, node_context=BitArray())
+        # Populate the nodes of the tree
+        root = CTWNode(id=BitArray())
+        queue = deque([(root, tree_height)])
+        while queue:
+            node, depth = queue.popleft()
+            if depth > 0:
+                node.left_child = CTWNode(id=node.id + BitArray("0"))
+                node.right_child = CTWNode(id=node.id + BitArray("1"))
+                queue.append((node.left_child, depth - 1))
+                queue.append((node.right_child, depth - 1))
+        self.root = root
 
     def print_tree(self):
         """
@@ -35,31 +47,16 @@ class CTWTree():
         """
 
         self.root.print_node()
-
-    def gen_tree(self, depth: int, node_context: BitArray) -> CTWNode:
-        """
-        Generate the subtree of given depth
-        """
-
-        # If depth is 0, node has no children (is a leaf of the CTW tree)
-        if depth == 0:
-            return CTWNode(id=node_context, left_child=None, right_child=None)
-        
-        # Generate the left and right subtrees
-        left_child = self.gen_tree(depth=depth-1, node_context=node_context + BitArray("0"))
-        right_child = self.gen_tree(depth=depth-1, node_context=node_context + BitArray("1"))
-
-        # Create the root node for this subtree
-        return CTWNode(id=node_context, left_child=left_child, right_child=right_child)
     
     def update_tree(self, sequence: BitArray):
         """
         Update the CTW tree with the given sequence of symbols
+        and updates the context accordingly
         """
 
         for symbol in sequence:
             self.update_tree_symbol(symbol)
-            self.update_context(uint_to_bitarray(symbol, bit_width=1))
+            self.update_context([symbol])
 
     def revert_tree(self):
         """
@@ -68,27 +65,22 @@ class CTWTree():
 
         for node, prev_state in self.snapshot:
             assert type(node) == CTWNode
-            assert type(prev_state) == CTWNode
-
-            node.a = prev_state.a
-            node.b = prev_state.b
-            node.kt_prob_as_ints = prev_state.kt_prob_as_ints
-            node.node_prob_as_ints = prev_state.node_prob_as_ints
+            node.a, node.b, node.kt_prob_log2, node.node_prob_log2 = prev_state
 
         # Clear the snapshot after completing revert
         self.snapshot = []
 
     def get_root_prob(self) -> float:
         """
-        Get the node probability of the root node as a floating point value
+        Get the node probability of the root node
 
-        prob = numerator / (2^[log2(denominator)])
+        prob = 2**prob_log2
         """
 
-        num, denom_log = self.root.node_prob_as_ints
-        return num / (2**denom_log)
+        return 2**self.root.node_prob_log2
 
-    # TODO: Will this return probability 0? If so...is that due to precision issues?
+    # TODO: This sometimes returns probability 0
+    # Or infinite probability -- probably should add checks/asserts?
     def get_symbol_prob(self, symbol: bool) -> float:
         """
         Compute the probability of seeing the given symbol based on the current state of the CTW tree
@@ -100,71 +92,62 @@ class CTWTree():
         self.snapshot = []
         self.get_snapshot = True
 
-        # Update the CTW tree with the given symbol
-        # We don't call update_tree_symbol() as that would update the context
-        self._update_node(node=self.root, context=self.current_context, symbol=symbol)
+        # Get the probability of the context
+        context_prob_log2 = self.root.node_prob_log2
 
-        # Compute the root probability after adding the given symbol
-        new_tree_prob_num, new_tree_prob_denom_log = self.root.node_prob_as_ints
+        # Update the CTW tree with the given symbol
+        self.update_tree_symbol(symbol)
+
+        # Get the probability of the combined symbol and context
+        symbol_context_prob_log2 = self.root.node_prob_log2
+
+        # Compute the probability of the symbol given the context
+        symbol_prob_log2 = symbol_context_prob_log2 - context_prob_log2
 
         # Undo the changes made (revert to before we added the given symbol)
         self.revert_tree()
         self.get_snapshot = False
 
-        # Compute the actual root probability (after reverting)
-        tree_prob_num, tree_prob_denom_log = self.root.node_prob_as_ints
-
-        # Compute new_prob/actual_prob
-        denom_log = new_tree_prob_denom_log - tree_prob_denom_log
-        symbol_prob = (new_tree_prob_num / tree_prob_num) / (2**denom_log)
-        
-        # Return the ratio of the probabilities 
-        return symbol_prob
+        return 2**symbol_prob_log2
 
     def update_tree_symbol(self, next_symbol: bool):
         """
-        Update the CTW tree with the given symbol
-
-        P(symbol | context) = P(symbol, context) / P(context)
+        NOTE: Does NOT update self.current_context
+        Update the CTW tree with the given symbol by traversing the branch corresponding to the current context
+        starting from the leaf node of the branch and updating the nodes towards the root
         """
-
-        # Call recursive function _update_node() to update the nodes of the tree
+        assert next_symbol == 0 or next_symbol == 1
         self._update_node(node=self.root, context=self.current_context, symbol=next_symbol)
+    
+    def _update_node(self, node: CTWNode, context: deque, symbol: bool):
+        # If we have reached the end of the context, this is as far as we traverse
+        # Update the snapshot of changed nodes (if needed), and update the node
+        if len(context) == 0:
+            if self.get_snapshot:
+                self.snapshot.append((node, (node.a, node.b, node.kt_prob_log2, node.node_prob_log2)))
+            node.kt_update_log2(symbol)
+            return
 
+        # Since the context is a deque, it is more effecient to pop then re-add than it is to access by index
+        # Store and remove the latest symbol of the context
+        latest_context_symbol = context.pop()
+
+        # Update the child (based on the latest symbol of the context) of the node first
+        self._update_node(node=node.get_child(latest_context_symbol), context=context, symbol=symbol)
+
+        # Re-add the symbol removed from the context
+        context.append(latest_context_symbol)
+
+        # Then update the snapshot of changed nodes (if needed), and update the node
+        if self.get_snapshot:
+            self.snapshot.append((node, (node.a, node.b, node.kt_prob_log2, node.node_prob_log2)))
+        node.kt_update_log2(symbol)
         
     def update_context(self, context: BitArray):
         assert len(context) <= len(self.current_context)
         # Update the context
         # Remove the beginning of the context
-        self.current_context = self.current_context[len(context):] + context
-
-    def _update_node(self, node: CTWNode, context: str, symbol: bool):
-        """
-        First update the children of the given node
-        then update the node itself
-
-        We traverse the tree according to the context, so only the path of the tree
-        corresponding to the context needs to be update
-        """
-        # If the context length is 0, this a leaf node
-        if len(context) == 0:
-            # Add node to snapshot (if needed)
-            if self.get_snapshot:
-                self.snapshot.append((node, copy.deepcopy(node)))
-
-            # Update the node's counts and probabilities
-            node.kt_update(symbol)
-            return
-
-        # Update the corresponding child (based on what's left of the context to traverse)
-        self._update_node(node=node.get_child(context[-1]), context=context[:-1], symbol=symbol)
-
-        # Add node to snapshot (if needed)
-        if self.get_snapshot:
-            self.snapshot.append((node, copy.deepcopy(node)))
-
-        # Update the node's counts and probabilities
-        node.kt_update(symbol)
+        self.current_context.extend(context)
 
 # TODO: These tests only test with tree depth 3
 # We should probably add tests for other depths
