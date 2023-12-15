@@ -11,6 +11,7 @@ from gc import get_referents
 from math import log2
 import matplotlib.pyplot as plt
 import numpy as np
+import requests
 import sys
 import time
 from types import ModuleType, FunctionType
@@ -217,8 +218,6 @@ def test_rate_vs_input_length_tree_source():
 
 def test_rate_vs_input_length_english():
     NUM_TREES = 8
-
-
     sizes_to_test = [20, 40, 60, 80, 100, 120, 150]
     sample_text = "Welcome to EE 274, a class on data compression at Stanford! This is the second offering of this course at Stanford. The reviews for the last offering are available via Stanford Carta."
     aec_params = AECParams()
@@ -235,7 +234,7 @@ def test_rate_vs_input_length_english():
 
 
         context_bitarray = BitArray(input_seq_binary[:k_chars*NUM_TREES])
-   
+
         ctw_enc = CTWModel(k_chars*NUM_TREES, context_bitarray)
         ctw_unicode_enc = CTWModelUnicode(k_chars*NUM_TREES, context_bitarray)
         markov_enc = AdaptiveOrderKFreqModel([chr(i) for i in range(256)], k_chars, aec_params.MAX_ALLOWED_TOTAL_FREQ)
@@ -253,15 +252,16 @@ def test_rate_vs_input_length_english():
     expected_lz77_rates = []
     for input_size in sizes_to_test:
         input_seq = sample_text[:input_size]
-        input_seq_binary = []
+        input_seq_int = []
         for char in input_seq:
-            input_seq_binary += uint_to_bitarray(ord(char), bit_width=NUM_TREES).tolist()
-        
+            input_seq_int.append(ord(char))
+
         lz77_enc = LZ77Encoder(initial_window=None)
 
-        lz77_bits = lz77_enc.encode_block(DataBlock(input_seq))
+        lz77_bits = lz77_enc.encode_block(DataBlock(input_seq_int))
 
-        expected_lz77_rates.append(len(lz77_bits)/input_size)
+        expected_lz77_rates.append(len(lz77_bits)/len(input_seq_int))
+
 
     print(expected_rates)
     print(expected_rates_unicode)
@@ -273,16 +273,133 @@ def test_rate_vs_input_length_english():
     plt.plot(sizes_to_test, expected_rates, 'o-')  # 'o-' means that the points will be marked and connected by a line
     plt.plot(sizes_to_test, expected_rates_unicode, 'o-')
     plt.plot(sizes_to_test, expected_markov_rates, 'o-')
-    # plt.plot(sizes_to_test, expected_lz77_rates, 'o-')
+    plt.plot(sizes_to_test, expected_lz77_rates, 'o-')
+
+
+    plt.xlabel('Input Length (characters)')
+    plt.ylabel('Optimal Rate (bits/symbol)')
+    plt.legend(["CTW - Depth 16", "CTW with 8 trees - Depth 16", "16th Order Adaptive Model", "LZ77"])
+    plt.ylim(5, 12)
+    # plt.xlim(0, 160)
+
+    plt.title("Optimal Rate vs Input Length for English Source")
+
+def test_rate_vs_input_length_sherlock():
+    NUM_TREES = 8
+
+    def download_url(url, as_text=True):
+        response = requests.get(url)
+        if not as_text:
+            return response.content
+        else:
+            return response.text
+
+    sherlock = download_url("https://www.gutenberg.org/cache/epub/2852/pg2852.txt")
+
+    print(len(sherlock))
+    print(sherlock[10])
+    sizes_to_test = [100, 200, 500, 1000, 2000, 5000, 10000, 20000, 50000, 100000, 200000, 381166]
+
+    aec_params = AECParams()
+    k_chars=2
+
+    """
+    expected_rates = []
+    expected_rates_unicode = []
+    expected_markov_rates = []
+    for input_size in sizes_to_test:
+        print("now testing block size", input_size)
+        input_seq = sherlock[:input_size]
+        input_seq_binary = []
+        for i in range(len(input_seq)):
+            ascii_val = ord(input_seq[i])
+            if ascii_val > 255:
+            if ascii_val == 8220:
+                rpl = "\""
+            elif ascii_val == 8212:
+                rpl = "-"
+            elif ascii_val == 8216:
+                rpl = "'"
+            elif ascii_val == 8217:
+                rpl = "'"
+            elif ascii_val == 8221:
+                rpl = "\""
+            else:
+                rpl = " "
+
+            input_seq = input_seq[:i] + rpl + input_seq[i+1:]
+            input_seq_binary += uint_to_bitarray(ord(input_seq[i]), bit_width=NUM_TREES).tolist()
+
+
+        context_bitarray = BitArray(input_seq_binary[:k_chars*NUM_TREES])
+
+        ctw_enc = CTWModel(k_chars*NUM_TREES, context_bitarray)
+        ctw_unicode_enc = CTWModelUnicode(k_chars*NUM_TREES, context_bitarray)
+        markov_enc = AdaptiveOrderKFreqModel([chr(i) for i in range(256)], k_chars, aec_params.MAX_ALLOWED_TOTAL_FREQ)
+
+
+        ctw_bits = compute_optimal_rate(ctw_enc, input_seq_binary[k_chars*NUM_TREES:]) + k_chars*NUM_TREES
+        ctw_unicode_bits = compute_optimal_rate(ctw_unicode_enc, input_seq[k_chars:]) + k_chars*NUM_TREES
+        markov_bits = compute_optimal_rate(markov_enc, input_seq)
+
+
+        expected_rates.append(ctw_bits/input_size)
+        expected_rates_unicode.append(ctw_unicode_bits/input_size)
+        expected_markov_rates.append(markov_bits/input_size)
+
+
+    expected_lz77_rates = []
+    for input_size in sizes_to_test:
+        input_seq = sherlock[:input_size]
+        input_seq_int = []
+        for char in input_seq:
+            ascii_val = ord(char)
+            if ascii_val > 255:
+                if ascii_val == 8220:
+                    rpl = "\""
+                elif ascii_val == 8212:
+                    rpl = "-"
+                elif ascii_val == 8216:
+                    rpl = "'"
+                elif ascii_val == 8217:
+                    rpl = "'"
+                elif ascii_val == 8221:
+                    rpl = "\""
+                else:
+                    rpl = " "
+                ascii_val = ord(rpl)
+
+            input_seq_int.append(ascii_val)
+
+        lz77_enc = LZ77Encoder(initial_window=None)
+
+        lz77_bits = lz77_enc.encode_block(DataBlock(input_seq_int))
+
+        expected_lz77_rates.append(len(lz77_bits)/len(input_seq_int))
+    """
+    expected_rates = [6.9732524433176035, 5.971592792433135, 5.257272828904487, 4.700438114751906, 4.482458406434033, 3.8494508532737934, 3.573546182684467, 3.2839852364967244, 2.9872647484232635, 2.9168099448421114, 2.8715035041638837]
+    expected_rates_unicode = [6.267817427736341, 5.73063387079042, 5.5, 5.239381020083248, 5.139366720841896, 4.710098400582242, 4.524399907656927, 4.313246786631371, 4.086808158524748, 4.037815926513225, 4.024810954938053]
+    expected_markov_rates = [7.894640123951783, 7.513910591749405, 7.313889198968683, 6.987825525754506, 6.87077492495205, 6.305347536451872, 5.803849117325835, 5.194598703095534, 4.364054588114752, 3.924154116727289, 3.536499296180615]
+    expected_lz77_rates = [9.39, 8.03, 5.526, 4.768, 4.333, 3.8372, 3.5698, 3.27895, 2.98854, 2.82899, 2.7394]
+
+    print(expected_rates)
+    print(expected_rates_unicode)
+    print(expected_markov_rates)
+
+    print(expected_lz77_rates)
+
+    plt.figure()
+    plt.plot(sizes_to_test, expected_rates, 'o-')  # 'o-' means that the points will be marked and connected by a line
+    plt.plot(sizes_to_test, expected_rates_unicode, 'o-')
+    plt.plot(sizes_to_test, expected_markov_rates, 'o-')
+    plt.plot(sizes_to_test, expected_lz77_rates, 'o-')
 
 
     plt.xlabel('Input Length (characters)')
     plt.ylabel('Optimal Rate (bits/symbol)')
     plt.legend(["CTW - Depth 16", "CTW with 8 trees - Depth 16", "16th Order Adaptive Model", "LZ77"])
     # plt.ylim(5.5, 8.5)
-    plt.xlim(0, 160)
+    # plt.xlim(0, 160)
+    plt.xscale('log')
 
     plt.title("Optimal Rate vs Input Length for English Source")
-    plt.savefig('rate_vs_input_length_english.png')
-
-# test_rate_vs_input_length_english()
