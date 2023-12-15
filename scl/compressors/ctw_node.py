@@ -1,5 +1,6 @@
 from __future__ import annotations
 from math import log2
+import numpy as np
 from scl.utils.tree_utils import BinaryNode
 
 class CTWNode(BinaryNode):
@@ -47,18 +48,8 @@ class CTWNode(BinaryNode):
         # TODO: magnitude of a is becoming so large (eg -1000) that 2**(a-b) becomes -inf 
         if b < a:
             temp = a-1 + log2(2**(b-a) + 1)
-            if 2**(b-a) < 0.001:
-                pass
-                # temp = a-1 + 2**(b-a)
-                # print("avg log2:", a, b, 2**(a-b), 2**(b-a), temp)
-                # print(self.kt_prob_log2, self.left_child.node_prob_log2 + self.right_child.node_prob_log2)
         else:
             temp = b-1 + log2(2**(a-b) + 1)
-            if 2**(a-b) < 0.001:
-                pass
-                # temp = b-1 + 2**(a-b)
-                # print("avg log2:", a, b, 2**(a-b), 2**(b-a), temp)
-                # print(self.kt_prob_log2, self.left_child.node_prob_log2, self.right_child.node_prob_log2)
         return temp
 
     def pr_prob_log2(self, nx: int, n: int) -> float:
@@ -102,6 +93,7 @@ class CTWNode(BinaryNode):
         when we call print_tree() in CTWTree
 
         Adds the symbol counts and node probability to the node label
+        Then remove them once we are done (since we are directly overwriting the node id)
         """
         original_id = self.id
         if not self.id:
@@ -116,3 +108,64 @@ class CTWNode(BinaryNode):
 def test_ctw_node():
     # TODO: Add logic to test the behavior of CTWNode
     test_node = CTWNode()
+
+    # Check starting values
+    alphabet = [0, 1]
+    for symbol in alphabet:
+        assert test_node.get_child(symbol) == None
+        assert test_node.get_count(symbol) == 0
+
+    # Check increment_count functions as expected
+    test_node.increment_count(0)
+    assert test_node.get_count(0) == 1
+    test_node.increment_count(1)
+    assert test_node.get_count(1) == 1
+
+    # Check pr_prob_log2 returns the expected values for the following combination of values
+    # Pr(a, a+b) = (a+0.5)/(a+b+1)
+    test_values = [(0, 0, 1/2), (0, 1, 1/4), (2, 1, 5/8), (3, 3, 1/2), (3, 4, 7/16)]
+    for a, b, result in test_values:
+        np.testing.assert_almost_equal(
+            2**test_node.pr_prob_log2(a, a+b),
+            result
+        )
+    
+    # Check kt_update_log2 updates the node probability to the expected value for the given sequence of symbols
+    # This is a leaf node so the node probability should equal the KT probability
+    test_leaf_node = CTWNode()
+    test_values = [0, 1, 0, 1]
+    for symbol in test_values:
+        test_leaf_node.kt_update_log2(symbol)
+
+    np.testing.assert_almost_equal(
+        2**test_leaf_node.node_prob_log2,
+        2**test_leaf_node.kt_prob_log2
+    )
+    np.testing.assert_almost_equal(
+        2**test_leaf_node.node_prob_log2,
+        3/128
+    )
+
+    # Check kt_update_log2 updates the node probability to the expected value for the given sequence of symbols
+    # This is an internal node so the node probability should equal
+    # the average of the KT probability and the product of its children's node probabilities
+    left_child = CTWNode()
+    right_child = CTWNode()
+    left_child.node_prob_log2 = log2(5/16)
+    right_child.node_prob_log2 = log2(3/8)
+
+    test_internal_node = CTWNode(left_child=left_child, right_child=right_child)
+
+    test_values = [0, 1, 0, 1]
+    for symbol in test_values:
+        test_internal_node.kt_update_log2(symbol)
+
+    np.testing.assert_almost_equal(
+        2**test_internal_node.node_prob_log2,
+        0.5 * (2**test_internal_node.kt_prob_log2 +
+               (2**test_internal_node.left_child.node_prob_log2) * (2**test_internal_node.right_child.node_prob_log2))
+    )
+    np.testing.assert_almost_equal(
+        2**test_internal_node.node_prob_log2,
+        9/128
+    )

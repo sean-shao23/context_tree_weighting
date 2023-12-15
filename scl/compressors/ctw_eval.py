@@ -172,14 +172,18 @@ def test_lz77_multiblock_file_encode_decode():
     print("lz77 coding took", time_taken_lz77*1000, "(ms)")
 
 def test_and_plot():
-    sizes = [100, 200, 500, 1000, 2000, 5000, 10000]
-    ctw_t = []
+    sizes = [1000, 2000, 4000, 6000, 8000, 10000]
+    ctw_e = []
+    ctw_d = []
     ctw_r = []
-    adapt_t = []
+    adapt_e = []
+    adapt_d = []
     adapt_r = []
-    huff_t = []
+    huff_e = []
+    huff_d = []
     huff_r = []
-    lz_t = []
+    lz_e = []
+    lz_d = []
     lz_r = []
     aec_params = AECParams()
     for data_size in sizes:
@@ -191,62 +195,72 @@ def test_and_plot():
         freq_model_dec = copy.deepcopy(freq_model_enc)
         encoder = ArithmeticEncoder(aec_params, freq_model_enc)
         decoder = ArithmeticDecoder(aec_params, freq_model_dec)
-        start_time_huffman = time.time()
-        is_lossless, output_len, _ = try_lossless_compression(seq_as_datablock, encoder, decoder)
-        time_taken_huffman = time.time() - start_time_huffman
+        is_lossless, output_len, _, enc_time, dec_time = try_lossless_compression(seq_as_datablock, encoder, decoder)
         assert is_lossless
-        ctw_t.append(time_taken_huffman*1000)
+        ctw_e.append(enc_time*1000)
+        ctw_d.append(dec_time*1000)
         ctw_r.append(output_len / data_size)
 
         freq_model_enc = AdaptiveOrderKFreqModel([0, 1], 3, aec_params.MAX_ALLOWED_TOTAL_FREQ)
         freq_model_dec = copy.deepcopy(freq_model_enc)
         encoder = ArithmeticEncoder(aec_params, freq_model_enc)
         decoder = ArithmeticDecoder(aec_params, freq_model_dec)
-        start_time_huffman = time.time()
-        is_lossless, output_len, _ = try_lossless_compression(seq_as_datablock, encoder, decoder)
-        time_taken_huffman = time.time() - start_time_huffman
+        is_lossless, output_len, _, enc_time, dec_time = try_lossless_compression(seq_as_datablock, encoder, decoder)
         assert is_lossless
-        adapt_t.append(time_taken_huffman*1000)
+        adapt_e.append(enc_time*1000)
+        adapt_d.append(dec_time*1000)
         adapt_r.append(output_len / data_size)
 
         encoder = HuffmanEncoder(prob_dist)
         decoder = HuffmanDecoder(prob_dist)
-        start_time_huffman = time.time()
-        is_lossless, output_len, _ = try_lossless_compression(seq_as_datablock, encoder, decoder)
-        time_taken_huffman = time.time() - start_time_huffman
+        is_lossless, output_len, _, enc_time, dec_time = try_lossless_compression(seq_as_datablock, encoder, decoder)
         assert is_lossless
-        huff_t.append(time_taken_huffman*1000)
+        huff_e.append(enc_time*1000)
+        huff_d.append(dec_time*1000)
         huff_r.append(output_len / data_size)
 
         encoder = LZ77Encoder(initial_window=None)
         decoder = LZ77Decoder(initial_window=None)
-        start_time_huffman = time.time()
-        # TODO: uncomment and fix resulting error
-        is_lossless, output_len, _ = try_lossless_compression(seq_as_datablock, encoder, decoder)
-        time_taken_huffman = time.time() - start_time_huffman
+        is_lossless, output_len, _, enc_time, dec_time = try_lossless_compression(seq_as_datablock, encoder, decoder)
         assert is_lossless
-        lz_t.append(time_taken_huffman*1000)
+        lz_e.append(enc_time*1000)
+        lz_d.append(dec_time*1000)
         lz_r.append(output_len / data_size)
 
     plt.figure()
-    plt.plot(sizes, ctw_t, 'o-')  # 'o-' means that the points will be marked and connected by a line
-    plt.plot(sizes, adapt_t, 'o-')
-    plt.plot(sizes, huff_t, 'o-')
-    plt.plot(sizes, lz_t, 'o-')
+    plt.plot(sizes, ctw_e, 'o-')  # 'o-' means that the points will be marked and connected by a line
+    plt.plot(sizes, adapt_e, 'o-')
+    plt.plot(sizes, huff_e, 'o-')
+    plt.plot(sizes, lz_e, 'o-')
 
 
     plt.xlabel('Input Length (symbols)')
     plt.ylabel('Time (ms))')
-    plt.legend(["CTW - Depth 3", "3rd Order Markov", "Huffman", "LZ77"])
+    plt.legend(["CTW - Depth 3", "3rd Order Adaptive Model", "Huffman", "LZ77"])
 
-    plt.title("Compression Time (Encode + Decode) vs Input Length")
-    plt.savefig('time_vs_length_all.png')
+    plt.title("Encode Time vs Input Length")
+    plt.savefig('enc_time_vs_length_all.png')
+
+    plt.figure()
+    plt.plot(sizes, ctw_d, 'o-')  # 'o-' means that the points will be marked and connected by a line
+    plt.plot(sizes, adapt_d, 'o-')
+    plt.plot(sizes, huff_d, 'o-')
+    plt.plot(sizes, lz_d, 'o-')
+
+
+    plt.xlabel('Input Length (symbols)')
+    plt.ylabel('Time (ms))')
+    plt.legend(["CTW - Depth 3", "3rd Order Adaptive Model", "Huffman", "LZ77"])
+
+    plt.title("Decode Time vs Input Length")
+    plt.savefig('dec_time_vs_length_all.png')
+
 
     plt.figure()
     plt.plot(sizes, ctw_r, 'o-')  # 'o-' means that the points will be marked and connected by a line
     plt.plot(sizes, adapt_r, 'o-')
     plt.plot(sizes, huff_r, 'o-')
-    #plt.plot(sizes, lz_r, 'o-')
+    plt.plot(sizes, lz_r, 'o-')
 
 
     plt.xlabel('Input Length (symbols)')

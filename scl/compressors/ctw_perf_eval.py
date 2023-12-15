@@ -125,7 +125,7 @@ def test_rate_vs_input_length_markov():
     sizes_to_test = [10, 20, 50, 100, 300, 500, 1000, 2000, 5000, 10000, 20000, 50000, 100000]
     aec_params = AECParams()
     prob_flip = 0.1
-    k=2
+    k=5
 
     expected_rates = []
     expected_markov_rates = []
@@ -136,7 +136,7 @@ def test_rate_vs_input_length_markov():
         ctw_enc = CTWModel(5, BitArray(context_str))
         markov_enc = AdaptiveOrderKFreqModel([0, 1], 5, aec_params.MAX_ALLOWED_TOTAL_FREQ)
 
-        ctw_bits = compute_optimal_rate(ctw_enc, input_seq[k:]) + k
+        ctw_bits = compute_optimal_rate(ctw_enc, input_seq[5:]) + 5
         markov_bits = compute_optimal_rate(markov_enc, input_seq)
         expected_rates.append(ctw_bits/input_size)
         expected_markov_rates.append(markov_bits/input_size)
@@ -152,13 +152,15 @@ def test_rate_vs_input_length_markov():
     plt.ylabel('Optimal Rate (bits/symbol)')
     plt.gca().set_ylim(bottom=0)
     plt.xscale('log')
-    plt.title("Optimal Rate vs Input Length for 2nd Order Markov Source with Bern(0.1)")
-    plt.legend(["CTW - Depth 5", "5th Order Markov Model"])
+    plt.title("Optimal Rate vs Input Length for 5th Order Markov Source with Bern(0.1)")
+    plt.legend(["CTW - Depth 5", "5th Order Adaptive Model"])
 
     # TODO: Make this a dashed line?
     plt.axhline(prob_flip*log2(1/prob_flip) + (1-prob_flip)*log2(1/(1-prob_flip)), color='green', linestyle='--')
 
     plt.savefig('rate_vs_input_length.png')
+
+test_rate_vs_input_length_markov()
 
 def test_rate_vs_input_length_tree_source():
     def gen_tree_source(num_samples, prob_bit_flip):
@@ -178,7 +180,7 @@ def test_rate_vs_input_length_tree_source():
     sizes_to_test = [10, 20, 50, 100, 300, 500, 1000, 2000, 5000, 10000]
     aec_params = AECParams()
     prob_flip = 0.1
-    k=5
+    k=2
 
     expected_rates = []
     expected_markov_rates = []
@@ -206,7 +208,7 @@ def test_rate_vs_input_length_tree_source():
     plt.ylim([0, 1])
     plt.xscale('log')
     plt.title("Optimal Rate vs Input Length for 2nd Order Tree Source with Bern(0.1)")
-    plt.legend(["CTW - Depth 5", "5th Order Markov"])
+    plt.legend(["CTW - Depth 2", "2nd Order Adaptive Model"])
 
     # TODO: Make this a dashed line?
     plt.axhline(prob_flip*log2(1/prob_flip) + (1-prob_flip)*log2(1/(1-prob_flip)), color='green', linestyle='--')
@@ -276,11 +278,11 @@ def test_rate_vs_input_length_english():
 
     plt.xlabel('Input Length (characters)')
     plt.ylabel('Optimal Rate (bits/symbol)')
-    plt.legend(["CTW - Depth 16", "CTW with 8 trees - Depth 16", "16th Order Markov", "LZ77"])
+    plt.legend(["CTW - Depth 16", "CTW with 8 trees - Depth 16", "16th Order Adaptive Model", "LZ77"])
     # plt.ylim(5.5, 8.5)
     plt.xlim(0, 160)
 
     plt.title("Optimal Rate vs Input Length for English Source")
     plt.savefig('rate_vs_input_length_english.png')
 
-test_rate_vs_input_length_english()
+# test_rate_vs_input_length_english()

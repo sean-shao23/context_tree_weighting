@@ -3,6 +3,7 @@ Utility functions useful for testing
 """
 
 import filecmp
+import time
 from typing import Tuple
 from scl.core.data_block import DataBlock
 from scl.core.data_stream import TextFileDataStream, Uint8FileDataStream
@@ -92,7 +93,9 @@ def try_lossless_compression(
     """
 
     # test encode
+    start_time = time.time()
     encoded_bitarray = encoder.encode_block(data_block)
+    enc_time = time.time() - start_time
 
     # if True, add some random bits to the encoder output
     encoded_bitarray_extra = BitArray(encoded_bitarray)  # make a copy
@@ -101,11 +104,13 @@ def try_lossless_compression(
         encoded_bitarray_extra += get_random_bitarray(num_extra_bits)
 
     # test decode
+    start_time = time.time()
     decoded_block, num_bits_consumed = decoder.decode_block(encoded_bitarray_extra)
+    dec_time = time.time() - start_time
     assert num_bits_consumed == len(encoded_bitarray), "Decoder did not consume all bits"
 
     # compare blocks
-    return are_blocks_equal(data_block, decoded_block), num_bits_consumed, encoded_bitarray
+    return are_blocks_equal(data_block, decoded_block), num_bits_consumed, encoded_bitarray, enc_time, dec_time
 
 
 def try_file_lossless_compression(

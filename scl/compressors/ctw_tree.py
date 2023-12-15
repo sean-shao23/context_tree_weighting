@@ -14,6 +14,7 @@ class CTWTree():
     Store the root node, context, and snapshot
     """
     root: CTWNode = None                        # root node of CTW tree
+    tree_height: int = None
     current_context: BitArray = None            # context (past symbols seen) for current state of CTW tree
     snapshot: list = None                       # list of nodes that were updated so that we can revert the update
     get_snapshot: bool = None                   # flag telling us whether to save what nodes we've updated
@@ -25,6 +26,7 @@ class CTWTree():
 
         assert len(past_context) == tree_height
 
+        self.tree_height = tree_height
         self.current_context = deque(past_context, maxlen=tree_height)
 
         # Populate the nodes of the tree
@@ -49,7 +51,7 @@ class CTWTree():
     def update_tree(self, sequence: BitArray):
         """
         Update the CTW tree with the given sequence of symbols
-        and update the context accordingly
+        and updates the context accordingly
         """
 
         for symbol in sequence:
@@ -110,22 +112,33 @@ class CTWTree():
 
     def update_tree_symbol(self, next_symbol: bool):
         """
+        NOTE: Does NOT update self.current_context
         Update the CTW tree with the given symbol by traversing the branch corresponding to the current context
         starting from the leaf node of the branch and updating the nodes towards the root
         """
         assert next_symbol == 0 or next_symbol == 1
-        self._update_node(node=self.root, context=list(self.current_context), symbol=next_symbol)
+        self._update_node(node=self.root, context=self.current_context, symbol=next_symbol)
     
-    def _update_node(self, node: CTWNode, context: str, symbol: bool):
+    def _update_node(self, node: CTWNode, context: deque, symbol: bool):
+        # If we have reached the end of the context, this is as far as we traverse
+        # Update the snapshot of changed nodes (if needed), and update the node
         if len(context) == 0:
             if self.get_snapshot:
                 self.snapshot.append((node, (node.a, node.b, node.kt_prob_log2, node.node_prob_log2)))
             node.kt_update_log2(symbol)
             return
-        latest_context_symbol = context[-1]
-        context.pop()
+
+        # Since the context is a deque, it is more effecient to pop then re-add than it is to access by index
+        # Store and remove the latest symbol of the context
+        latest_context_symbol = context.pop()
+
+        # Update the child (based on the latest symbol of the context) of the node first
         self._update_node(node=node.get_child(latest_context_symbol), context=context, symbol=symbol)
+
+        # Re-add the symbol removed from the context
         context.append(latest_context_symbol)
+
+        # Then update the snapshot of changed nodes (if needed), and update the node
         if self.get_snapshot:
             self.snapshot.append((node, (node.a, node.b, node.kt_prob_log2, node.node_prob_log2)))
         node.kt_update_log2(symbol)
