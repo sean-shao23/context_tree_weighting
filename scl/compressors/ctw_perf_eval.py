@@ -3,7 +3,6 @@ from scl.compressors.lz77 import LZ77Encoder
 from scl.compressors.arithmetic_coding import AECParams, ArithmeticEncoder
 from scl.compressors.ctw_eval import gen_kth_order_markov_seq
 from scl.compressors.ctw_model import CTWModel, CTWModelUnicode
-from scl.compressors.ctw_tree import CTWTree
 from scl.compressors.probability_models import AdaptiveOrderKFreqModel
 from scl.utils.bitarray_utils import BitArray, uint_to_bitarray
 
@@ -156,7 +155,6 @@ def test_rate_vs_input_length_markov():
     plt.title("Optimal Rate vs Input Length for 5th Order Markov Source with Bern(0.1)")
     plt.legend(["CTW - Depth 5", "5th Order Adaptive Model"])
 
-    # TODO: Make this a dashed line?
     plt.axhline(prob_flip*log2(1/prob_flip) + (1-prob_flip)*log2(1/(1-prob_flip)), color='green', linestyle='--')
 
     plt.savefig('rate_vs_input_length.png')
@@ -211,7 +209,6 @@ def test_rate_vs_input_length_tree_source():
     plt.title("Optimal Rate vs Input Length for 2nd Order Tree Source with Bern(0.1)")
     plt.legend(["CTW - Depth 2", "2nd Order Adaptive Model"])
 
-    # TODO: Make this a dashed line?
     plt.axhline(prob_flip*log2(1/prob_flip) + (1-prob_flip)*log2(1/(1-prob_flip)), color='green', linestyle='--')
 
     plt.savefig('rate_vs_input_length_tree.png')
@@ -377,10 +374,10 @@ def test_rate_vs_input_length_sherlock():
 
         expected_lz77_rates.append(len(lz77_bits)/len(input_seq_int))
     """
-    expected_rates = [6.9732524433176035, 5.971592792433135, 5.257272828904487, 4.700438114751906, 4.482458406434033, 3.8494508532737934, 3.573546182684467, 3.2839852364967244, 2.9872647484232635, 2.9168099448421114, 2.8715035041638837]
-    expected_rates_unicode = [6.267817427736341, 5.73063387079042, 5.5, 5.239381020083248, 5.139366720841896, 4.710098400582242, 4.524399907656927, 4.313246786631371, 4.086808158524748, 4.037815926513225, 4.024810954938053]
-    expected_markov_rates = [7.894640123951783, 7.513910591749405, 7.313889198968683, 6.987825525754506, 6.87077492495205, 6.305347536451872, 5.803849117325835, 5.194598703095534, 4.364054588114752, 3.924154116727289, 3.536499296180615]
-    expected_lz77_rates = [9.39, 8.03, 5.526, 4.768, 4.333, 3.8372, 3.5698, 3.27895, 2.98854, 2.82899, 2.7394]
+    expected_rates = [6.9732524433176035, 5.971592792433135, 5.257272828904487, 4.700438114751906, 4.482458406434033, 3.8494508532737934, 3.573546182684467, 3.2839852364967244, 2.9872647484232635, 2.9168099448421114, 2.8715035041638837, 2.8940615606240954]
+    expected_rates_unicode = [6.267817427736341, 5.73063387079042, 5.5, 5.239381020083248, 5.139366720841896, 4.710098400582242, 4.524399907656927, 4.313246786631371, 4.086808158524748, 4.037815926513225, 4.024810954938053, 4.049867378752702]
+    expected_markov_rates = [7.894640123951783, 7.513910591749405, 7.313889198968683, 6.987825525754506, 6.87077492495205, 6.305347536451872, 5.803849117325835, 5.194598703095534, 4.364054588114752, 3.924154116727289, 3.536499296180615, 3.296019537811402]
+    expected_lz77_rates = [9.39, 8.03, 5.526, 4.768, 4.333, 3.8372, 3.5698, 3.27895, 2.98854, 2.82899, 2.7394, 2.6592823074460994]
 
     print(expected_rates)
     print(expected_rates_unicode)
