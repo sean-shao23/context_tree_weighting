@@ -1,5 +1,5 @@
 from scl.compressors.arithmetic_coding import AECParams, ArithmeticDecoder, ArithmeticEncoder
-from scl.compressors.ctw_model import CTWModel, compress_sequence
+from scl.compressors.context_tree_weighting import CTWModel, compress_sequence
 from scl.compressors.huffman_coder import (
     HuffmanEncoder,
     HuffmanDecoder,

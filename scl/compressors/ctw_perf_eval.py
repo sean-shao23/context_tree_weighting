@@ -2,7 +2,7 @@ from scl.core.data_block import DataBlock
 from scl.compressors.lz77 import LZ77Encoder
 from scl.compressors.arithmetic_coding import AECParams, ArithmeticEncoder
 from scl.compressors.ctw_eval import gen_kth_order_markov_seq
-from scl.compressors.ctw_model import CTWModel, CTWModelUnicode
+from scl.compressors.context_tree_weighting import CTWModel, CTWModelUnicode
 from scl.compressors.probability_models import AdaptiveOrderKFreqModel
 from scl.utils.bitarray_utils import BitArray, uint_to_bitarray
 
