@@ -1,3 +1,6 @@
+"""
+Basic demo of CTW compared with Adaptive, Huffman, and LZ77
+"""
 from scl.compressors.arithmetic_coding import AECParams, ArithmeticDecoder, ArithmeticEncoder
 from scl.compressors.context_tree_weighting import CTWModel, compress_sequence
 from scl.compressors.huffman_coder import (
