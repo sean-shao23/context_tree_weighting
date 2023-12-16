@@ -2,7 +2,7 @@ from scl.core.data_block import DataBlock
 from scl.compressors.lz77 import LZ77Encoder
 from scl.compressors.arithmetic_coding import AECParams, ArithmeticEncoder
 from scl.compressors.ctw_eval import gen_kth_order_markov_seq
-from scl.compressors.context_tree_weighting import CTWModel, CTWModelUnicode
+from scl.compressors.context_tree_weighting import CTWTree, CTWModel, CTWModelUnicode
 from scl.compressors.probability_models import AdaptiveOrderKFreqModel
 from scl.utils.bitarray_utils import BitArray, uint_to_bitarray
 
@@ -26,21 +26,20 @@ def compute_optimal_rate(enc: Any, sequence: list):
     return bits
 
 def test_time_vs_input_size():
-    sizes_to_test = [1, 2, 3, 4, 5, 10, 20]
+    sizes_to_test = [1, 2, 3, 4, 5]
+    # sizes_to_test = [1, 2, 3, 4, 5, 10, 20]
 
-    times_taken = [3905.0087928771973, 6431.334733963013, 9527.854681015015, 12986.912488937378, 17629.652738571167, 35804.90827560425, 71199.5599269867]
-    # times_taken = []
-    if not times_taken:
-        for input_size in sizes_to_test:
-            input_seq = np.zeros(input_size*100000, dtype=int)
-            ctw_enc = CTWModel(3, BitArray("110"))
+    times_taken = []
+    for input_size in sizes_to_test:
+        input_seq = np.zeros(input_size*100000, dtype=int)
+        ctw_enc = CTWModel(3, BitArray("110"))
 
-            start_time = time.time()
+        start_time = time.time()
 
-            for symbol in input_seq:
-                ctw_enc.update_model(symbol)
+        for symbol in input_seq:
+            ctw_enc.update_model(symbol)
 
-            times_taken.append((time.time() - start_time)*1000)
+        times_taken.append((time.time() - start_time)*1000)
 
     print(times_taken)
     
@@ -57,21 +56,20 @@ def test_time_vs_input_size():
 
 def test_time_vs_tree_size():
     datasize = 100000
-    sizes_to_test = [1, 2, 3, 4, 5, 10, 20]
+    sizes_to_test = [1, 2, 3, 4, 5]
+    # sizes_to_test = [1, 2, 3, 4, 5, 10, 20]
 
-    times_taken = [2461.505889892578, 3035.9439849853516, 3503.7267208099365, 3989.502429962158, 4312.785387039185, 6371.909141540527, 12429.552555084229]
-    # times_taken = []
-    if not times_taken:
-        for input_size in sizes_to_test:
-            input_seq = np.zeros(datasize, dtype=int)
-            ctw_enc = CTWModel(input_size, BitArray("0"*input_size))
+    times_taken = []
+    for input_size in sizes_to_test:
+        input_seq = np.zeros(datasize, dtype=int)
+        ctw_enc = CTWModel(input_size, BitArray("0"*input_size))
 
-            start_time = time.time()
+        start_time = time.time()
 
-            for symbol in input_seq:
-                ctw_enc.update_model(symbol)
+        for symbol in input_seq:
+            ctw_enc.update_model(symbol)
 
-            times_taken.append((time.time() - start_time)*1000)
+        times_taken.append((time.time() - start_time)*1000)
 
     print(times_taken)
     
@@ -106,10 +104,10 @@ def test_memory_vs_tree_size():
             objects = get_referents(*need_referents)
         return size
 
-    sizes = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+    sizes = [0, 1, 2, 3, 4, 5]
+    # sizes = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
 
-    # tree_sizes = [getsize(CTWTree(size, BitArray("0"*size)))/1000 for size in sizes]
-    tree_sizes = [1.024, 1.52, 2.452, 4.316, 8.044, 15.5, 30.412, 60.236, 119.884, 240.716, 480.332]
+    tree_sizes = [getsize(CTWTree(size, BitArray("0"*size)))/1000 for size in sizes]
     print(tree_sizes)
 
     plt.figure()
@@ -122,7 +120,8 @@ def test_memory_vs_tree_size():
 
 
 def test_rate_vs_input_length_markov():
-    sizes_to_test = [10, 20, 50, 100, 300, 500, 1000, 2000, 5000, 10000, 20000, 50000, 100000]
+    sizes_to_test = [10, 20, 50, 100, 300, 500, 1000, 2000, 5000, 10000]
+    # sizes_to_test = [10, 20, 50, 100, 300, 500, 1000, 2000, 5000, 10000, 20000, 50000, 100000]
     aec_params = AECParams()
     prob_flip = 0.1
     k=5
@@ -294,37 +293,35 @@ def test_rate_vs_input_length_sherlock():
     sherlock = download_url("https://www.gutenberg.org/cache/epub/2852/pg2852.txt")
 
     print(len(sherlock))
-    print(sherlock[10])
-    sizes_to_test = [100, 200, 500, 1000, 2000, 5000, 10000, 20000, 50000, 100000, 200000, 381166]
+    sizes_to_test = [100, 200, 500, 1000, 2000, 5000, 10000]
+    # sizes_to_test = [100, 200, 500, 1000, 2000, 5000, 10000, 20000, 50000, 100000, 200000, 381166]
 
     aec_params = AECParams()
     k_chars=2
 
-    """
     expected_rates = []
     expected_rates_unicode = []
     expected_markov_rates = []
     for input_size in sizes_to_test:
-        print("now testing block size", input_size)
         input_seq = sherlock[:input_size]
         input_seq_binary = []
         for i in range(len(input_seq)):
             ascii_val = ord(input_seq[i])
             if ascii_val > 255:
-            if ascii_val == 8220:
-                rpl = "\""
-            elif ascii_val == 8212:
-                rpl = "-"
-            elif ascii_val == 8216:
-                rpl = "'"
-            elif ascii_val == 8217:
-                rpl = "'"
-            elif ascii_val == 8221:
-                rpl = "\""
-            else:
-                rpl = " "
+                if ascii_val == 8220:
+                    rpl = "\""
+                elif ascii_val == 8212:
+                    rpl = "-"
+                elif ascii_val == 8216:
+                    rpl = "'"
+                elif ascii_val == 8217:
+                    rpl = "'"
+                elif ascii_val == 8221:
+                    rpl = "\""
+                else:
+                    rpl = " "
 
-            input_seq = input_seq[:i] + rpl + input_seq[i+1:]
+                input_seq = input_seq[:i] + rpl + input_seq[i+1:]
             input_seq_binary += uint_to_bitarray(ord(input_seq[i]), bit_width=NUM_TREES).tolist()
 
 
@@ -373,11 +370,6 @@ def test_rate_vs_input_length_sherlock():
         lz77_bits = lz77_enc.encode_block(DataBlock(input_seq_int))
 
         expected_lz77_rates.append(len(lz77_bits)/len(input_seq_int))
-    """
-    expected_rates = [6.9732524433176035, 5.971592792433135, 5.257272828904487, 4.700438114751906, 4.482458406434033, 3.8494508532737934, 3.573546182684467, 3.2839852364967244, 2.9872647484232635, 2.9168099448421114, 2.8715035041638837, 2.8940615606240954]
-    expected_rates_unicode = [6.267817427736341, 5.73063387079042, 5.5, 5.239381020083248, 5.139366720841896, 4.710098400582242, 4.524399907656927, 4.313246786631371, 4.086808158524748, 4.037815926513225, 4.024810954938053, 4.049867378752702]
-    expected_markov_rates = [7.894640123951783, 7.513910591749405, 7.313889198968683, 6.987825525754506, 6.87077492495205, 6.305347536451872, 5.803849117325835, 5.194598703095534, 4.364054588114752, 3.924154116727289, 3.536499296180615, 3.296019537811402]
-    expected_lz77_rates = [9.39, 8.03, 5.526, 4.768, 4.333, 3.8372, 3.5698, 3.27895, 2.98854, 2.82899, 2.7394, 2.6592823074460994]
 
     print(expected_rates)
     print(expected_rates_unicode)
