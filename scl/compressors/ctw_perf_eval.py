@@ -1,3 +1,6 @@
+"""
+Various figures demonstrating the performance of our CTW implementation
+"""
 from scl.core.data_block import DataBlock
 from scl.compressors.lz77 import LZ77Encoder
 from scl.compressors.arithmetic_coding import AECParams, ArithmeticEncoder
