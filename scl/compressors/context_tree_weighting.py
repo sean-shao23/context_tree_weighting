@@ -27,7 +27,7 @@ def convert_float_prob_to_int(p: float, M: int=2**16) -> int:
 
     # Checks if result will be 0
     if int(p * M) <= 0:
-        print("Multiplier", M, "too small for probability", p)
+        # Unfortunate workaround since some probabilities get very very small
         return 1
 
     return int(p * M)
@@ -297,8 +297,8 @@ class CTWModel(FreqModelBase):
         self.ctw_tree = CTWTree(tree_height=tree_height, past_context=context)
 
         prob_of_zero = self.ctw_tree.get_symbol_prob(0)
-        default_dist = {0: convert_float_prob_to_int(prob_of_zero),
-                        1: convert_float_prob_to_int(1-prob_of_zero)}
+        default_dist = {0: convert_float_prob_to_int(prob_of_zero, M=2**24),
+                        1: convert_float_prob_to_int(1-prob_of_zero, M=2**24)}
         assert default_dist[0] == default_dist[1]
         self.freqs_current = Frequencies(default_dist)
 
@@ -313,8 +313,8 @@ class CTWModel(FreqModelBase):
         
         # Compute the new symbol probabilities for the CTW tree
         prob_of_zero = self.ctw_tree.get_symbol_prob(0)
-        new_dist = {0: convert_float_prob_to_int(prob_of_zero),
-                    1: convert_float_prob_to_int(1-prob_of_zero)}
+        new_dist = {0: convert_float_prob_to_int(prob_of_zero, M=2**24),
+                    1: convert_float_prob_to_int(1-prob_of_zero, M=2**24)}
 
         # Update the frequency distribution
         self.freqs_current = Frequencies(new_dist)
@@ -369,7 +369,7 @@ class CTWModelUnicode(FreqModelBase):
                     probability *= probs_of_zero[j]
                 else:
                     probability *= 1 - probs_of_zero[j]
-            new_dist[chr(i)] = convert_float_prob_to_int(probability, M=2**30)
+            new_dist[chr(i)] = convert_float_prob_to_int(probability, M=2**24)
 
         # Update the frequency distribution
         self.freqs_current = Frequencies(new_dist)
